@@ -4,15 +4,15 @@ services:
     container_name: avatars-postgres
     restart: always
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: gophprofile
+      POSTGRES_PASSWORD: gophprofile
       POSTGRES_DB: avatars
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d avatars"]
+      test: ["CMD-SHELL", "pg_isready -U gophprofile -d avatars"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -60,10 +60,9 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 minioadmin minioadmin &&
       mc mb local/avatars || true &&
-      mc policy set public local/avatars &&
+      mc anonymous set public local/avatars &&
       exit 0;
       "
-
   migrate:
     image: migrate/migrate
     container_name: avatars-migrate
@@ -78,7 +77,7 @@ services:
       sleep 3 &&
       migrate
       -path /migrations
-      -database postgres://user:password@postgres:5432/avatars?sslmode=disable
+      -database postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
       up
       "
 
@@ -101,7 +100,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DB_URL: postgres://user:password@postgres:5432/avatars?sslmode=disable
+      DB_URL: postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
       S3_ENDPOINT: minio:9000
       S3_KEY: minioadmin
       S3_SECRET: minioadmin
@@ -126,7 +125,7 @@ services:
         condition: service_completed_successfully
     command: ["./worker"]
     environment:
-      DB_URL: postgres://user:password@postgres:5432/avatars?sslmode=disable
+      DB_URL: postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
       S3_ENDPOINT: minio:9000
       S3_KEY: minioadmin
       S3_SECRET: minioadmin

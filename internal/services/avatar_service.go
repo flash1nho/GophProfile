@@ -9,18 +9,26 @@ import (
 )
 
 type Repository interface {
-	Create(context.Context, *domain.Avatar) error
-	GetByID(context.Context, string) (*domain.Avatar, error)
-	SoftDelete(context.Context, string) error
+	Create(ctx context.Context, a *domain.Avatar) error
+	GetByID(ctx context.Context, id string) (*domain.Avatar, error)
+	SoftDelete(ctx context.Context, id string) error
+
+	GetLatestByUser(ctx context.Context, userID string) (*domain.Avatar, error)
+	ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error)
+	UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error
+
+	Ping(ctx context.Context) error
 }
 
 type Storage interface {
 	Upload(context.Context, string, []byte, string) error
 	Download(context.Context, string) ([]byte, error)
+	Health(ctx context.Context) error
 }
 
 type Publisher interface {
 	Publish(any) error
+	Ping() error
 }
 
 type AvatarService struct {
@@ -67,4 +75,101 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 	}
 
 	return avatar, nil
+}
+
+func (s *AvatarService) Get(ctx context.Context, id, size string) ([]byte, string, error) {
+	avatar, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var key string
+
+	switch size {
+	case "100x100", "300x300":
+		if avatar.ThumbnailKeys != nil {
+			if k, ok := avatar.ThumbnailKeys[size]; ok {
+				key = k
+			}
+		}
+	}
+
+	// fallback на оригинал
+	if key == "" {
+		key = avatar.S3Key
+	}
+
+	data, err := s.s3.Download(ctx, key)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return data, avatar.MimeType, nil
+}
+
+func (s *AvatarService) GetByUser(ctx context.Context, userID string) (*domain.Avatar, error) {
+	return s.repo.GetLatestByUser(ctx, userID)
+}
+
+func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
+	avatar, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// проверка владельца
+	if avatar.UserID != userID {
+		return fmt.Errorf("forbidden")
+	}
+
+	// мягкое удаление
+	if err := s.repo.SoftDelete(ctx, id); err != nil {
+		return err
+	}
+
+	// собрать все ключи для удаления
+	keys := []string{avatar.S3Key}
+
+	for _, k := range avatar.ThumbnailKeys {
+		keys = append(keys, k)
+	}
+
+	// отправить событие на удаление (async)
+	if err := s.pub.Publish(map[string]any{
+		"avatar_id": id,
+		"s3_keys":   keys,
+	}); err != nil {
+		// не падаем — это async часть
+		fmt.Printf("publish delete event error: %v\n", err)
+	}
+
+	return nil
+}
+
+func (s *AvatarService) DeleteByUser(ctx context.Context, userID string) error {
+	avatar, err := s.repo.GetLatestByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.Delete(ctx, avatar.ID, userID)
+}
+
+func (s *AvatarService) ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error) {
+	return s.repo.ListByUser(ctx, userID)
+}
+
+func (s *AvatarService) GetMetadata(ctx context.Context, id string) (*domain.Avatar, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+func (s *AvatarService) PingDB(ctx context.Context) error {
+	return s.repo.Ping(ctx)
+}
+
+func (s *AvatarService) PingS3(ctx context.Context) error {
+	return s.s3.Health(ctx)
+}
+
+func (s *AvatarService) PingRabbit(ctx context.Context) error {
+	return s.pub.Ping()
 }

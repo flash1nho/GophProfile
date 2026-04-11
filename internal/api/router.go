@@ -3,18 +3,35 @@ package api
 import (
 	"net/http"
 
-	"github.com/flash1nho/GophProfile/internal/handlers"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/flash1nho/GophProfile/internal/handlers"
+	"github.com/flash1nho/GophProfile/pkg/middleware"
 )
 
 func NewRouter(h *handlers.AvatarHandler) http.Handler {
 	r := chi.NewRouter()
 
-	r.Post("/api/v1/avatars", h.Upload)
+	rl := middleware.NewRateLimiter(5, 10)
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	r.Use(middleware.CORS)
+	r.Use(rl.Middleware)
+
+	r.Post("/api/v1/avatars", h.Upload)
+	r.With(middleware.RequireUser).Delete("/api/v1/avatars/{id}", h.Delete)
+
+	r.Get("/api/v1/avatars/{id}", h.Get)
+	r.Get("/api/v1/avatars/{id}/metadata", h.Metadata)
+
+	r.Get("/api/v1/users/{user_id}/avatar", h.GetByUser)
+	r.With(middleware.RequireUser).Delete("/api/v1/users/{user_id}/avatar", h.DeleteByUser)
+	r.Get("/api/v1/users/{user_id}/avatars", h.ListByUser)
+
+	r.Get("/health", h.Health)
+
+	r.Get("/web/upload", h.WebUploadForm)
+	r.Post("/web/upload", h.WebUploadSubmit)
+	r.Get("/web/gallery/{user_id}", h.WebGallery)
 
 	return r
 }

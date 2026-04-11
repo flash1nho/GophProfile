@@ -2,11 +2,13 @@ package broker
 
 import (
 	"encoding/json"
+	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Rabbit struct {
+	conn     *amqp.Connection
 	ch       *amqp.Channel
 	exchange string
 }
@@ -71,4 +73,11 @@ func (r *Rabbit) Publish(event any) error {
 			DeliveryMode: amqp.Persistent,
 		},
 	)
+}
+
+func (r *Rabbit) Ping() error {
+	if r.conn == nil || r.conn.IsClosed() {
+		return fmt.Errorf("rabbitmq connection closed")
+	}
+	return nil
 }
