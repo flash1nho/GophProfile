@@ -2,16 +2,21 @@ package handlers
 
 import (
 	"crypto/sha1"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
+	"github.com/flash1nho/GophProfile/internal/dto"
 	"github.com/flash1nho/GophProfile/internal/services"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
 	httpresp "github.com/flash1nho/GophProfile/pkg/http"
 )
+
+const maxFileSize = 10 << 20 // 10MB
 
 type AvatarHandler struct {
 	svc *services.AvatarService
@@ -34,14 +39,25 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxFileSize)
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		httpresp.Error(w, 413, "file too large")
+	if err := r.ParseMultipartForm(maxFileSize); err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":    "File too large",
+				"max_size": maxFileSize,
+			}); err != nil {
+				h.log.Error("encode error", zap.Error(err))
+			}
+			return
+		}
+
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	file, header, err := r.FormFile("image")
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		httpresp.Error(w, 400, "file is required")
 		return
@@ -56,13 +72,38 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	mime := http.DetectContentType(data)
 
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+	}
+
+	if !allowedTypes[mime] {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Invalid file format",
+			"details": "Supported formats: jpeg, png, webp",
+		}); err != nil {
+			h.log.Error("encode error", zap.Error(err))
+		}
+		return
+	}
+
 	avatar, err := h.svc.Upload(ctx, userID, header.Filename, mime, data)
 	if err != nil {
 		httpresp.Error(w, 500, err.Error())
 		return
 	}
 
-	httpresp.JSON(w, 201, avatar)
+	response := dto.AvatarUploadResponse{
+		ID:        avatar.ID,
+		UserID:    avatar.UserID,
+		URL:       fmt.Sprintf("/api/v1/avatars/%s", avatar.ID),
+		Status:    avatar.UploadStatus,
+		CreatedAt: avatar.CreatedAt,
+	}
+
+	httpresp.JSON(w, http.StatusCreated, response)
 }
 
 func (h *AvatarHandler) Get(w http.ResponseWriter, r *http.Request) {

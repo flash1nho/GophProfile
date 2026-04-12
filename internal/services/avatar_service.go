@@ -60,7 +60,7 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 		MimeType:         mime,
 		SizeBytes:        int64(len(data)),
 		S3Key:            key,
-		UploadStatus:     "done",
+		UploadStatus:     "processing",
 		ProcessingStatus: "pending",
 	}
 

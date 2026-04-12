@@ -1,6 +1,16 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
+
+type Status string
+
+const (
+	StatusProcessing Status = "processing"
+	StatusReady      Status = "ready"
+	StatusFailed     Status = "failed"
+)
 
 type Avatar struct {
 	ID               string
@@ -10,7 +20,7 @@ type Avatar struct {
 	SizeBytes        int64
 	S3Key            string
 	ThumbnailKeys    map[string]string
-	UploadStatus     string
+	UploadStatus     Status
 	ProcessingStatus string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time

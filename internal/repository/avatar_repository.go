@@ -18,13 +18,15 @@ func NewAvatarRepository(db *pgxpool.Pool, log *zap.Logger) *AvatarRepository {
 }
 
 func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {
-	_, err := r.db.Exec(ctx, `
+	err := r.db.QueryRow(ctx, `
 	INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes, s3_key, upload_status, processing_status)
 	VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+	RETURNING created_at
 	`,
 		a.ID, a.UserID, a.FileName, a.MimeType, a.SizeBytes, a.S3Key,
 		a.UploadStatus, a.ProcessingStatus,
-	)
+	).Scan(&a.CreatedAt)
+
 	return err
 }
 
