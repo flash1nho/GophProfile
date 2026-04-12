@@ -18,13 +18,11 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// DB
 	db, err := pgxpool.New(context.Background(), cfg.DBURL)
 	if err != nil {
 		log.Fatalf("db error: %v", err)
 	}
 
-	// S3
 	s3Client, err := minio.New(cfg.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3Key, cfg.S3Secret, ""),
 		Secure: false,
@@ -38,7 +36,6 @@ func main() {
 	repo := repository.NewAvatarRepository(db)
 	w := worker.NewWorker(repo, s3)
 
-	// RabbitMQ
 	conn, err := amqp.Dial(cfg.RabbitURL)
 	if err != nil {
 		log.Fatalf("rabbit connect error: %v", err)

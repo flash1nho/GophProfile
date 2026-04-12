@@ -69,8 +69,6 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-		// логируем, но не валим основной поток
-		// (важный прод-паттерн)
 		fmt.Printf("publish error: %v\n", err)
 	}
 
@@ -94,7 +92,6 @@ func (s *AvatarService) Get(ctx context.Context, id, size string) ([]byte, strin
 		}
 	}
 
-	// fallback на оригинал
 	if key == "" {
 		key = avatar.S3Key
 	}
@@ -117,29 +114,24 @@ func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
 		return err
 	}
 
-	// проверка владельца
 	if avatar.UserID != userID {
 		return fmt.Errorf("forbidden")
 	}
 
-	// мягкое удаление
 	if err := s.repo.SoftDelete(ctx, id); err != nil {
 		return err
 	}
 
-	// собрать все ключи для удаления
 	keys := []string{avatar.S3Key}
 
 	for _, k := range avatar.ThumbnailKeys {
 		keys = append(keys, k)
 	}
 
-	// отправить событие на удаление (async)
 	if err := s.pub.Publish(map[string]any{
 		"avatar_id": id,
 		"s3_keys":   keys,
 	}); err != nil {
-		// не падаем — это async часть
 		fmt.Printf("publish delete event error: %v\n", err)
 	}
 

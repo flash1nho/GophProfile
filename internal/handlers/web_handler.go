@@ -26,7 +26,6 @@ func (h *AvatarHandler) WebUploadSubmit(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// прокидываем header
 	r.Header.Set("X-User-ID", userID)
 
 	h.Upload(w, r)
