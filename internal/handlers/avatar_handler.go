@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"crypto/sha1"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,13 +52,10 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if err := r.ParseMultipartForm(maxFileSize); err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			httpresp.JSON(w, http.StatusRequestEntityTooLarge, map[string]string{
 				"error":    "File too large",
-				"max_size": maxFileSize,
-			}); err != nil {
-				h.log.Error("encode error", zap.Error(err))
-			}
+				"max_size": fmt.Sprintf("%d", maxFileSize),
+			})
 			return
 		}
 
@@ -89,13 +85,10 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !allowedTypes[mime] {
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		httpresp.JSON(w, http.StatusBadRequest, map[string]string{
 			"error":   "Invalid file format",
 			"details": "Supported formats: jpeg, png, webp",
-		}); err != nil {
-			h.log.Error("encode error", zap.Error(err))
-		}
+		})
 		return
 	}
 
@@ -244,32 +237,62 @@ func (h *AvatarHandler) GetByUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AvatarHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	userID := r.Header.Get("X-User-ID")
-
-	if err := h.svc.Delete(r.Context(), id, userID); err != nil {
-		httpresp.Error(w, 403, err.Error())
+	avatarID := chi.URLParam(r, "id")
+	if avatarID == "" {
+		httpresp.Error(w, http.StatusBadRequest, "avatar_id is required")
 		return
 	}
 
-	w.WriteHeader(204)
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		httpresp.Error(w, http.StatusBadRequest, "X-User-ID header is required")
+		return
+	}
+
+	err := h.svc.Delete(r.Context(), avatarID, userID)
+	if err != nil {
+		if err.Error() == "forbidden" {
+			httpresp.JSON(w, http.StatusForbidden, map[string]string{
+				"error":   "Forbidden",
+				"details": "You can only delete your own avatars",
+			})
+			return
+		}
+
+		httpresp.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AvatarHandler) DeleteByUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "user_id")
+	if userID == "" {
+		httpresp.Error(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+
 	headerID := r.Header.Get("X-User-ID")
+	if headerID == "" {
+		httpresp.Error(w, http.StatusBadRequest, "X-User-ID header is required")
+		return
+	}
 
 	if userID != headerID {
-		httpresp.Error(w, 403, "forbidden")
+		httpresp.JSON(w, http.StatusForbidden, map[string]string{
+			"error":   "Forbidden",
+			"details": "You can only delete your own avatars",
+		})
 		return
 	}
 
 	if err := h.svc.DeleteByUser(r.Context(), userID); err != nil {
-		httpresp.Error(w, 500, err.Error())
+		httpresp.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AvatarHandler) Metadata(w http.ResponseWriter, r *http.Request) {

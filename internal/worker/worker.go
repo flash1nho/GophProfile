@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/pkg/storage"
 	"github.com/flash1nho/GophProfile/pkg/utils"
@@ -57,22 +58,25 @@ func (w *Worker) HandleUploadEvent(message []byte) error {
 func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
 	avatar, err := w.repo.GetAvatar(ctx, event.AvatarID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get avatar: %w", err)
 	}
 
-	if avatar.ProcessingStatus == "completed" {
+	if avatar.ProcessingStatus == domain.ProcessingStatusReady {
 		return nil
 	}
 
-	if avatar.ProcessingStatus != "processing" {
-		if err := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, "processing"); err != nil {
-			return err
+	if avatar.ProcessingStatus != domain.ProcessingStatusProcessing {
+		if err := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusProcessing); err != nil {
+			return fmt.Errorf("set processing status: %w", err)
 		}
 	}
 
 	img, err := w.s3.Download(ctx, event.S3Key)
 	if err != nil {
-		return err
+		if errStatus := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusFailed); errStatus != nil {
+			return fmt.Errorf("download error: %v; additionally failed to update status: %w", err, errStatus)
+		}
+		return fmt.Errorf("download image: %w", err)
 	}
 
 	sizes := map[string]utils.ImageSize{
@@ -85,19 +89,28 @@ func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
 	for sizeKey, size := range sizes {
 		resized, _, err := utils.Process(img, size, utils.FormatJPEG)
 		if err != nil {
-			return err
+			if errStatus := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusFailed); errStatus != nil {
+				return fmt.Errorf("process error: %v; status update failed: %w", err, errStatus)
+			}
+			return fmt.Errorf("process image: %w", err)
 		}
 
 		key := fmt.Sprintf("thumbnails/%s/%s.jpg", event.AvatarID, sizeKey)
 
 		exists, err := w.s3.Exists(ctx, key)
 		if err != nil {
-			return err
+			if errStatus := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusFailed); errStatus != nil {
+				return fmt.Errorf("exists check error: %v; status update failed: %w", err, errStatus)
+			}
+			return fmt.Errorf("check exists: %w", err)
 		}
 
 		if !exists {
 			if err := w.s3.Upload(ctx, key, resized, "image/jpeg"); err != nil {
-				return err
+				if errStatus := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusFailed); errStatus != nil {
+					return fmt.Errorf("upload error: %v; status update failed: %w", err, errStatus)
+				}
+				return fmt.Errorf("upload thumbnail: %w", err)
 			}
 		}
 
@@ -105,22 +118,30 @@ func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
 	}
 
 	if err := w.repo.UpdateThumbnails(ctx, event.AvatarID, result); err != nil {
-		return err
+		if errStatus := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusFailed); errStatus != nil {
+			return fmt.Errorf("update thumbnails error: %v; status update failed: %w", err, errStatus)
+		}
+		return fmt.Errorf("update thumbnails: %w", err)
 	}
 
-	return w.repo.UpdateProcessingStatus(ctx, event.AvatarID, "completed")
+	if err := w.repo.UpdateProcessingStatus(ctx, event.AvatarID, domain.ProcessingStatusReady); err != nil {
+		return fmt.Errorf("set ready status: %w", err)
+	}
+
+	return nil
 }
 
 func (w *Worker) handleDelete(ctx context.Context, event DeleteEvent) error {
 	for _, key := range event.S3Keys {
+
 		exists, err := w.s3.Exists(ctx, key)
 		if err != nil {
-			return err
+			return fmt.Errorf("check exists (%s): %w", key, err)
 		}
 
 		if exists {
 			if err := w.s3.Delete(ctx, key); err != nil {
-				return err
+				return fmt.Errorf("delete (%s): %w", key, err)
 			}
 		}
 	}
@@ -146,9 +167,9 @@ func retry(ctx context.Context, attempts int, baseDelay time.Duration, fn func()
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("retry canceled: %w", ctx.Err())
 		}
 	}
 
-	return err
+	return fmt.Errorf("retry failed after %d attempts: %w", attempts, err)
 }

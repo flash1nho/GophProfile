@@ -17,7 +17,8 @@ type Repository interface {
 
 	GetLatestByUser(ctx context.Context, userID string) (*domain.Avatar, error)
 	ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error)
-	UpdateProcessingStatus(ctx context.Context, id string, status string) error
+	UpdateUploadStatus(ctx context.Context, id string, status domain.UploadStatus) error
+	UpdateProcessingStatus(ctx context.Context, id string, status domain.ProcessingStatus) error
 	UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error
 
 	Ping(ctx context.Context) error
@@ -26,6 +27,7 @@ type Repository interface {
 type Storage interface {
 	Upload(context.Context, string, []byte, string) error
 	Download(context.Context, string) ([]byte, error)
+	Delete(ctx context.Context, key string) error
 	Health(ctx context.Context) error
 }
 
@@ -45,33 +47,108 @@ func NewAvatarService(r Repository, s Storage, p Publisher, l *zap.Logger) *Avat
 	return &AvatarService{repo: r, s3: s, pub: p, log: l}
 }
 
-func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime string, data []byte) (*domain.Avatar, error) {
+func (s *AvatarService) Upload(
+	ctx context.Context,
+	userID, fileName, mime string,
+	data []byte,
+) (*domain.Avatar, error) {
+
 	id := uuid.NewString()
 	key := fmt.Sprintf("avatars/%s/original", id)
 
-	if err := s.s3.Upload(ctx, key, data, mime); err != nil {
-		return nil, err
-	}
-
 	avatar := &domain.Avatar{
-		ID:        id,
-		UserID:    userID,
-		FileName:  fileName,
-		MimeType:  mime,
-		SizeBytes: int64(len(data)),
-		S3Key:     key,
+		ID:               id,
+		UserID:           userID,
+		FileName:         fileName,
+		MimeType:         mime,
+		SizeBytes:        int64(len(data)),
+		S3Key:            key,
+		UploadStatus:     domain.UploadStatusUploading,
+		ProcessingStatus: domain.ProcessingStatusPending,
 	}
 
 	if err := s.repo.Create(ctx, avatar); err != nil {
-		return nil, err
+		s.log.Error("create avatar failed",
+			zap.String("avatar_id", id),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("create avatar: %w", err)
 	}
+
+	if err := s.s3.Upload(ctx, key, data, mime); err != nil {
+		s.log.Error("s3 upload failed",
+			zap.String("avatar_id", id),
+			zap.Error(err),
+		)
+
+		if errStatus := s.repo.UpdateUploadStatus(ctx, id, domain.UploadStatusFailed); errStatus != nil {
+			s.log.Error("failed to update upload status",
+				zap.String("avatar_id", id),
+				zap.Error(errStatus),
+			)
+		}
+
+		if errProc := s.repo.UpdateProcessingStatus(ctx, id, domain.ProcessingStatusFailed); errProc != nil {
+			s.log.Error("failed to update processing status",
+				zap.String("avatar_id", id),
+				zap.Error(errProc),
+			)
+		}
+
+		return nil, fmt.Errorf("upload to s3: %w", err)
+	}
+
+	if err := s.repo.UpdateUploadStatus(ctx, id, domain.UploadStatusUploaded); err != nil {
+		s.log.Error("update upload status failed",
+			zap.String("avatar_id", id),
+			zap.Error(err),
+		)
+
+		if errDelete := s.s3.Delete(ctx, key); errDelete != nil {
+			s.log.Error("failed to cleanup s3 after db error",
+				zap.String("avatar_id", id),
+				zap.Error(errDelete),
+			)
+		}
+
+		if errStatus := s.repo.UpdateUploadStatus(ctx, id, domain.UploadStatusFailed); errStatus != nil {
+			s.log.Error("failed to mark upload as failed",
+				zap.String("avatar_id", id),
+				zap.Error(errStatus),
+			)
+		}
+
+		if errProc := s.repo.UpdateProcessingStatus(ctx, id, domain.ProcessingStatusFailed); errProc != nil {
+			s.log.Error("failed to mark processing as failed",
+				zap.String("avatar_id", id),
+				zap.Error(errProc),
+			)
+		}
+
+		return nil, fmt.Errorf("update upload status: %w", err)
+	}
+
+	avatar.UploadStatus = domain.UploadStatusUploaded
 
 	if err := s.pub.Publish(map[string]string{
 		"avatar_id": id,
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-		s.log.Error("publish error", zap.Error(err))
+
+		s.log.Error("publish failed",
+			zap.String("avatar_id", id),
+			zap.Error(err),
+		)
+
+		if errProc := s.repo.UpdateProcessingStatus(ctx, id, domain.ProcessingStatusFailed); errProc != nil {
+			s.log.Error("failed to update processing status after publish error",
+				zap.String("avatar_id", id),
+				zap.Error(errProc),
+			)
+		}
+
+		return avatar, fmt.Errorf("publish event: %w", err)
 	}
 
 	return avatar, nil

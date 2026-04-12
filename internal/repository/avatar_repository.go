@@ -131,13 +131,21 @@ func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]dom
 	return list, nil
 }
 
-func (r *AvatarRepository) UpdateProcessingStatus(ctx context.Context, id string, status string) error {
-	query := `
-		UPDATE avatars
-		SET processing_status = $1, updated_at = NOW()
-		WHERE id = $2
-	`
-	_, err := r.db.Exec(ctx, query, status, id)
+func (r *AvatarRepository) UpdateUploadStatus(ctx context.Context, id string, status domain.UploadStatus) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE avatars SET upload_status = $1, updated_at = NOW() WHERE id = $2`,
+		string(status),
+		id,
+	)
+	return err
+}
+
+func (r *AvatarRepository) UpdateProcessingStatus(ctx context.Context, id string, status domain.ProcessingStatus) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE avatars SET processing_status = $1, updated_at = NOW() WHERE id = $2`,
+		string(status),
+		id,
+	)
 	return err
 }
 
