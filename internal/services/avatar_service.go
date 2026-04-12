@@ -225,13 +225,22 @@ func (s *AvatarService) GetMetadata(ctx context.Context, id string) (*domain.Ava
 }
 
 func (s *AvatarService) PingDB(ctx context.Context) error {
+	if s.repo == nil {
+		return fmt.Errorf("repo not initialized")
+	}
 	return s.repo.Ping(ctx)
 }
 
 func (s *AvatarService) PingS3(ctx context.Context) error {
+	if s.s3 == nil {
+		return fmt.Errorf("s3 not initialized")
+	}
 	return s.s3.Health(ctx)
 }
 
 func (s *AvatarService) PingRabbit(ctx context.Context) error {
+	if s.pub == nil {
+		return fmt.Errorf("publisher not initialized")
+	}
 	return s.pub.Ping()
 }

@@ -4,16 +4,24 @@ import (
 	"context"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 )
 
+type DB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Ping(ctx context.Context) error
+}
+
 type AvatarRepository struct {
-	db  *pgxpool.Pool
+	db  DB
 	log *zap.Logger
 }
 
-func NewAvatarRepository(db *pgxpool.Pool, log *zap.Logger) *AvatarRepository {
+func NewAvatarRepository(db DB, log *zap.Logger) *AvatarRepository {
 	return &AvatarRepository{db: db, log: log}
 }
 

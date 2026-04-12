@@ -12,15 +12,41 @@ import (
 	"github.com/flash1nho/GophProfile/pkg/utils"
 )
 
+type repoIface interface {
+	GetAvatar(ctx context.Context, id string) (*domain.Avatar, error)
+	UpdateProcessingStatus(ctx context.Context, id string, status domain.ProcessingStatus) error
+	UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error
+}
+
+type s3Iface interface {
+	Download(ctx context.Context, key string) ([]byte, error)
+	Upload(ctx context.Context, key string, data []byte, contentType string) error
+	Delete(ctx context.Context, key string) error
+	Exists(ctx context.Context, key string) (bool, error)
+}
+
+type Timer interface {
+	After(d time.Duration) <-chan time.Time
+}
+
+type realTimer struct{}
+
 type Worker struct {
-	repo *repository.AvatarRepository
-	s3   *storage.S3
+	repo repoIface
+	s3   s3Iface
+
+	timer         Timer
+	retryAttempts int
+	retryDelay    time.Duration
 }
 
 func NewWorker(repo *repository.AvatarRepository, s3 *storage.S3) *Worker {
 	return &Worker{
-		repo: repo,
-		s3:   s3,
+		repo:          repo,
+		s3:            s3,
+		timer:         realTimer{},
+		retryAttempts: 5,
+		retryDelay:    time.Second,
 	}
 }
 
@@ -40,14 +66,14 @@ func (w *Worker) HandleUploadEvent(message []byte) error {
 
 	var upload UploadEvent
 	if err := json.Unmarshal(message, &upload); err == nil && upload.AvatarID != "" && upload.S3Key != "" {
-		return retry(ctx, 5, time.Second, func() error {
+		return retry(ctx, 5, time.Second, realTimer{}, func() error {
 			return w.handleUpload(ctx, upload)
 		})
 	}
 
 	var del DeleteEvent
 	if err := json.Unmarshal(message, &del); err == nil && del.AvatarID != "" {
-		return retry(ctx, 5, time.Second, func() error {
+		return retry(ctx, 5, time.Second, realTimer{}, func() error {
 			return w.handleDelete(ctx, del)
 		})
 	}
@@ -149,10 +175,19 @@ func (w *Worker) handleDelete(ctx context.Context, event DeleteEvent) error {
 	return nil
 }
 
-func retry(ctx context.Context, attempts int, baseDelay time.Duration, fn func() error) error {
+func (r realTimer) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}
+
+func retry(ctx context.Context, attempts int, baseDelay time.Duration, t Timer, fn func() error) error {
 	var err error
 
 	for i := 0; i < attempts; i++ {
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("retry canceled: %w", ctx.Err())
+		}
+
 		err = fn()
 		if err == nil {
 			return nil
@@ -165,7 +200,7 @@ func retry(ctx context.Context, attempts int, baseDelay time.Duration, fn func()
 		delay := baseDelay * time.Duration(1<<i)
 
 		select {
-		case <-time.After(delay):
+		case <-t.After(delay):
 		case <-ctx.Done():
 			return fmt.Errorf("retry canceled: %w", ctx.Err())
 		}
