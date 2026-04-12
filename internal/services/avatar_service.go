@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/google/uuid"
@@ -70,7 +71,7 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-		fmt.Printf("publish error: %v\n", err)
+		log.Printf("publish error: %v", err)
 	}
 
 	return avatar, nil
