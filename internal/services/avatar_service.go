@@ -15,6 +15,7 @@ type Repository interface {
 
 	GetLatestByUser(ctx context.Context, userID string) (*domain.Avatar, error)
 	ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error)
+	UpdateProcessingStatus(ctx context.Context, id string, status string) error
 	UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error
 
 	Ping(ctx context.Context) error

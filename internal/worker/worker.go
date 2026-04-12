@@ -63,5 +63,10 @@ func (w *Worker) Handle(message []byte) error {
 		result[size] = key
 	}
 
-	return w.repo.UpdateThumbnails(ctx, event.AvatarID, result)
+	err = w.repo.UpdateThumbnails(ctx, event.AvatarID, result)
+	if err != nil {
+		return err
+	}
+
+	return w.repo.UpdateProcessingStatus(ctx, event.AvatarID, "completed")
 }

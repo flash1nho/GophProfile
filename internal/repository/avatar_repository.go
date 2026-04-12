@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -82,6 +83,25 @@ func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]dom
 	}
 
 	return list, nil
+}
+
+func (r *AvatarRepository) UpdateProcessingStatus(ctx context.Context, id string, status string) error {
+	query := `
+	UPDATE avatars
+	SET processing_status = $1, updated_at = NOW()
+	WHERE id = $2 AND deleted_at IS NULL
+	`
+
+	cmdTag, err := r.db.Exec(ctx, query, status, id)
+	if err != nil {
+		return err
+	}
+
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("avatar not found")
+	}
+
+	return nil
 }
 
 func (r *AvatarRepository) UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error {
