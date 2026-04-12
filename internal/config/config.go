@@ -1,8 +1,9 @@
 package config
 
 import (
-	"log"
 	"os"
+
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -14,7 +15,7 @@ type Config struct {
 	RabbitURL  string
 }
 
-func Load() *Config {
+func Load(log *zap.Logger) *Config {
 	cfg := &Config{
 		DBURL:      os.Getenv("DB_URL"),
 		S3Endpoint: os.Getenv("S3_ENDPOINT"),
@@ -24,12 +25,12 @@ func Load() *Config {
 		RabbitURL:  os.Getenv("RABBIT_URL"),
 	}
 
-	validate(cfg)
+	validate(cfg, log)
 
 	return cfg
 }
 
-func validate(c *Config) {
+func validate(c *Config, log *zap.Logger) {
 	if c.S3Endpoint == "" {
 		log.Fatal("S3_ENDPOINT is required")
 	}

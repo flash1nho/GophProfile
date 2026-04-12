@@ -5,14 +5,16 @@ import (
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type AvatarRepository struct {
-	db *pgxpool.Pool
+	db  *pgxpool.Pool
+	log *zap.Logger
 }
 
-func NewAvatarRepository(db *pgxpool.Pool) *AvatarRepository {
-	return &AvatarRepository{db: db}
+func NewAvatarRepository(db *pgxpool.Pool, log *zap.Logger) *AvatarRepository {
+	return &AvatarRepository{db: db, log: log}
 }
 
 func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {

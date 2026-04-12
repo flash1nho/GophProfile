@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -16,15 +17,24 @@ import (
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/internal/services"
 	"github.com/flash1nho/GophProfile/pkg/broker"
+	"github.com/flash1nho/GophProfile/pkg/logger"
 	"github.com/flash1nho/GophProfile/pkg/storage"
 )
 
 func main() {
-	cfg := config.Load()
+	log, err := logger.New()
+	if err != nil {
+		panic(err)
+	}
+	defer log.Sync()
+
+	log.Info("starting server")
+
+	cfg := config.Load(log)
 
 	db, err := pgxpool.New(context.Background(), cfg.DBURL)
 	if err != nil {
-		log.Fatalf("db connect error: %v", err)
+		log.Error("db connect error", zap.Error(err))
 	}
 
 	s3Client, err := minio.New(cfg.S3Endpoint, &minio.Options{
@@ -32,35 +42,35 @@ func main() {
 		Secure: false,
 	})
 	if err != nil {
-		log.Fatalf("s3 init error: %v", err)
+		log.Fatal("s3 init error", zap.Error(err))
 	}
 
 	s3 := storage.New(s3Client, cfg.S3Bucket)
 
 	conn, err := amqp.Dial(cfg.RabbitURL)
 	if err != nil {
-		log.Fatalf("rabbit connect error: %v", err)
+		log.Fatal("rabbit connect error", zap.Error(err))
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("rabbit channel error: %v", err)
+		log.Fatal("rabbit channel error", zap.Error(err))
 	}
 
 	rabbit, err := broker.New(ch)
 	if err != nil {
-		log.Fatalf("rabbit init error: %v", err)
+		log.Fatal("rabbit init error", zap.Error(err))
 	}
 
-	repo := repository.NewAvatarRepository(db)
-	service := services.NewAvatarService(repo, s3, rabbit)
+	repo := repository.NewAvatarRepository(db, log)
+	service := services.NewAvatarService(repo, s3, rabbit, log)
 	handler := handlers.NewAvatarHandler(service)
 
-	router := api.NewRouter(handler)
+	router := api.NewRouter(handler, log)
 
-	log.Println("server started :8080")
+	log.Info("server started :8080")
 
 	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatalf("server error: %v", err)
+		log.Fatal("server error", zap.Error(err))
 	}
 }

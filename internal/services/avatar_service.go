@@ -3,7 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"go.uber.org/zap"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/google/uuid"
@@ -37,10 +38,11 @@ type AvatarService struct {
 	repo Repository
 	s3   Storage
 	pub  Publisher
+	log  *zap.Logger
 }
 
-func NewAvatarService(r Repository, s Storage, p Publisher) *AvatarService {
-	return &AvatarService{repo: r, s3: s, pub: p}
+func NewAvatarService(r Repository, s Storage, p Publisher, l *zap.Logger) *AvatarService {
+	return &AvatarService{repo: r, s3: s, pub: p, log: l}
 }
 
 func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime string, data []byte) (*domain.Avatar, error) {
@@ -71,7 +73,7 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-		log.Printf("publish error: %v", err)
+		s.log.Error("publish error", zap.Error(err))
 	}
 
 	return avatar, nil
