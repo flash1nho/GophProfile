@@ -21,6 +21,7 @@ import (
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/internal/services"
 	"github.com/flash1nho/GophProfile/pkg/broker"
+	"github.com/flash1nho/GophProfile/pkg/cache"
 	"github.com/flash1nho/GophProfile/pkg/logger"
 	"github.com/flash1nho/GophProfile/pkg/storage"
 )
@@ -88,7 +89,9 @@ func main() {
 
 	repo := repository.NewAvatarRepository(db, log)
 	service := services.NewAvatarService(repo, s3, rabbit, log)
-	handler := handlers.NewAvatarHandler(service, log)
+
+	cache := cache.NewMemoryCache()
+	handler := handlers.NewAvatarHandler(service, log, cache)
 
 	router := api.NewRouter(handler, log)
 	addr := ":8080"

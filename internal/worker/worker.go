@@ -75,20 +75,20 @@ func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
 		return err
 	}
 
-	sizes := map[string][2]int{
-		"100x100": {100, 100},
-		"300x300": {300, 300},
+	sizes := map[string]utils.ImageSize{
+		"100x100": utils.Size100,
+		"300x300": utils.Size300,
 	}
 
 	result := make(map[string]string)
 
-	for size, dim := range sizes {
-		resized, err := utils.Resize(img, dim[0], dim[1])
+	for sizeKey, size := range sizes {
+		resized, _, err := utils.Process(img, size, utils.FormatJPEG)
 		if err != nil {
 			return err
 		}
 
-		key := fmt.Sprintf("thumbnails/%s/%s.jpg", event.AvatarID, size)
+		key := fmt.Sprintf("thumbnails/%s/%s.jpg", event.AvatarID, sizeKey)
 
 		exists, err := w.s3.Exists(ctx, key)
 		if err != nil {
@@ -101,7 +101,7 @@ func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
 			}
 		}
 
-		result[size] = key
+		result[sizeKey] = key
 	}
 
 	if err := w.repo.UpdateThumbnails(ctx, event.AvatarID, result); err != nil {

@@ -1,9 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 
+	"go.uber.org/zap"
+
+	"github.com/flash1nho/GophProfile/internal/dto"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -43,13 +47,30 @@ func (h *AvatarHandler) WebGallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	baseURL := getBaseURL(r)
+
+	items := make([]dto.GalleryItem, 0, len(avatars))
+
+	for _, a := range avatars {
+		items = append(items, dto.GalleryItem{
+			ID:       a.ID,
+			FileName: a.FileName,
+			URL: fmt.Sprintf(
+				"%s/api/v1/avatars/%s?size=300x300&format=webp",
+				baseURL,
+				a.ID,
+			),
+		})
+	}
+
 	tmpl, err := template.ParseFiles("web/static/gallery.html")
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	if err := tmpl.Execute(w, avatars); err != nil {
+	if err := tmpl.Execute(w, items); err != nil {
+		h.log.Error("template error", zap.Error(err))
 		http.Error(w, err.Error(), 500)
 	}
 }

@@ -54,14 +54,12 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 	}
 
 	avatar := &domain.Avatar{
-		ID:               id,
-		UserID:           userID,
-		FileName:         fileName,
-		MimeType:         mime,
-		SizeBytes:        int64(len(data)),
-		S3Key:            key,
-		UploadStatus:     "processing",
-		ProcessingStatus: "pending",
+		ID:        id,
+		UserID:    userID,
+		FileName:  fileName,
+		MimeType:  mime,
+		SizeBytes: int64(len(data)),
+		S3Key:     key,
 	}
 
 	if err := s.repo.Create(ctx, avatar); err != nil {

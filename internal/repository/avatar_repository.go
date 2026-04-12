@@ -19,12 +19,11 @@ func NewAvatarRepository(db *pgxpool.Pool, log *zap.Logger) *AvatarRepository {
 
 func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {
 	err := r.db.QueryRow(ctx, `
-	INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes, s3_key, upload_status, processing_status)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+	INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes, s3_key)
+	VALUES ($1,$2,$3,$4,$5,$6)
 	RETURNING created_at
 	`,
 		a.ID, a.UserID, a.FileName, a.MimeType, a.SizeBytes, a.S3Key,
-		a.UploadStatus, a.ProcessingStatus,
 	).Scan(&a.CreatedAt)
 
 	return err
@@ -32,7 +31,7 @@ func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {
 
 func (r *AvatarRepository) GetAvatar(ctx context.Context, id string) (*domain.Avatar, error) {
 	row := r.db.QueryRow(ctx, `
-	SELECT id, user_id, file_name, mime_type, size_bytes, s3_key, processing_status
+	SELECT id, user_id, file_name, mime_type, size_bytes, s3_key, upload_status, processing_status, created_at, updated_at
 	FROM avatars WHERE id=$1 AND deleted_at IS NULL
 	`, id)
 
@@ -44,7 +43,10 @@ func (r *AvatarRepository) GetAvatar(ctx context.Context, id string) (*domain.Av
 		&a.MimeType,
 		&a.SizeBytes,
 		&a.S3Key,
+		&a.UploadStatus,
 		&a.ProcessingStatus,
+		&a.CreatedAt,
+		&a.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -78,10 +80,22 @@ func (r *AvatarRepository) GetLatestByUser(ctx context.Context, userID string) (
 }
 
 func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT id, file_name FROM avatars WHERE user_id=$1 AND deleted_at IS NULL`,
-		userID,
-	)
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			id,
+			user_id,
+			file_name,
+			mime_type,
+			size_bytes,
+			s3_key,
+			upload_status,
+			processing_status,
+			created_at,
+			updated_at
+		FROM avatars
+		WHERE user_id=$1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,10 +105,27 @@ func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]dom
 
 	for rows.Next() {
 		var a domain.Avatar
-		if err := rows.Scan(&a.ID, &a.FileName); err != nil {
+
+		if err := rows.Scan(
+			&a.ID,
+			&a.UserID,
+			&a.FileName,
+			&a.MimeType,
+			&a.SizeBytes,
+			&a.S3Key,
+			&a.UploadStatus,
+			&a.ProcessingStatus,
+			&a.CreatedAt,
+			&a.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
+
 		list = append(list, a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return list, nil

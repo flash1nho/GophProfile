@@ -4,12 +4,20 @@ import (
 	"time"
 )
 
-type Status string
+type UploadStatus string
+type ProcessingStatus string
 
 const (
-	StatusProcessing Status = "processing"
-	StatusReady      Status = "ready"
-	StatusFailed     Status = "failed"
+	UploadStatusUploading UploadStatus = "uploading"
+	UploadStatusUploaded  UploadStatus = "uploaded"
+	UploadStatusFailed    UploadStatus = "failed"
+)
+
+const (
+	ProcessingStatusPending    ProcessingStatus = "pending"
+	ProcessingStatusProcessing ProcessingStatus = "processing"
+	ProcessingStatusReady      ProcessingStatus = "ready"
+	ProcessingStatusFailed     ProcessingStatus = "failed"
 )
 
 type Avatar struct {
@@ -20,9 +28,9 @@ type Avatar struct {
 	SizeBytes        int64
 	S3Key            string
 	ThumbnailKeys    map[string]string
-	UploadStatus     Status
-	ProcessingStatus string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	DeletedAt        time.Time
+	UploadStatus     UploadStatus
+	ProcessingStatus ProcessingStatus
+	CreatedAt        *time.Time
+	UpdatedAt        *time.Time
+	DeletedAt        *time.Time
 }
