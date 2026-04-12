@@ -54,7 +54,7 @@ func main() {
 	log.Println("worker started")
 
 	for msg := range msgs {
-		if err := w.Handle(msg.Body); err != nil {
+		if err := w.HandleUploadEvent(msg.Body); err != nil {
 			log.Printf("worker handle error: %v", err)
 		}
 	}

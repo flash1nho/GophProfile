@@ -10,7 +10,7 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, a *domain.Avatar) error
-	GetByID(ctx context.Context, id string) (*domain.Avatar, error)
+	GetAvatar(ctx context.Context, id string) (*domain.Avatar, error)
 	SoftDelete(ctx context.Context, id string) error
 
 	GetLatestByUser(ctx context.Context, userID string) (*domain.Avatar, error)
@@ -77,7 +77,7 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mime strin
 }
 
 func (s *AvatarService) Get(ctx context.Context, id, size string) ([]byte, string, error) {
-	avatar, err := s.repo.GetByID(ctx, id)
+	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return nil, "", err
 	}
@@ -110,7 +110,7 @@ func (s *AvatarService) GetByUser(ctx context.Context, userID string) (*domain.A
 }
 
 func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
-	avatar, err := s.repo.GetByID(ctx, id)
+	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -119,24 +119,7 @@ func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
 		return fmt.Errorf("forbidden")
 	}
 
-	if err := s.repo.SoftDelete(ctx, id); err != nil {
-		return err
-	}
-
-	keys := []string{avatar.S3Key}
-
-	for _, k := range avatar.ThumbnailKeys {
-		keys = append(keys, k)
-	}
-
-	if err := s.pub.Publish(map[string]any{
-		"avatar_id": id,
-		"s3_keys":   keys,
-	}); err != nil {
-		fmt.Printf("publish delete event error: %v\n", err)
-	}
-
-	return nil
+	return s.repo.SoftDelete(ctx, id)
 }
 
 func (s *AvatarService) DeleteByUser(ctx context.Context, userID string) error {
@@ -152,7 +135,7 @@ func (s *AvatarService) ListByUser(ctx context.Context, userID string) ([]domain
 }
 
 func (s *AvatarService) GetMetadata(ctx context.Context, id string) (*domain.Avatar, error) {
-	return s.repo.GetByID(ctx, id)
+	return s.repo.GetAvatar(ctx, id)
 }
 
 func (s *AvatarService) PingDB(ctx context.Context) error {

@@ -2,8 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,21 +26,34 @@ func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {
 	return err
 }
 
-func (r *AvatarRepository) GetByID(ctx context.Context, id string) (*domain.Avatar, error) {
+func (r *AvatarRepository) GetAvatar(ctx context.Context, id string) (*domain.Avatar, error) {
 	row := r.db.QueryRow(ctx, `
-	SELECT id, user_id, file_name, mime_type, size_bytes, s3_key
+	SELECT id, user_id, file_name, mime_type, size_bytes, s3_key, processing_status
 	FROM avatars WHERE id=$1 AND deleted_at IS NULL
 	`, id)
 
 	var a domain.Avatar
-	if err := row.Scan(&a.ID, &a.UserID, &a.FileName, &a.MimeType, &a.SizeBytes, &a.S3Key); err != nil {
+	if err := row.Scan(
+		&a.ID,
+		&a.UserID,
+		&a.FileName,
+		&a.MimeType,
+		&a.SizeBytes,
+		&a.S3Key,
+		&a.ProcessingStatus,
+	); err != nil {
 		return nil, err
 	}
 	return &a, nil
 }
 
-func (r *AvatarRepository) SoftDelete(ctx context.Context, id string) error {
-	_, err := r.db.Exec(ctx, `UPDATE avatars SET deleted_at=NOW() WHERE id=$1`, id)
+func (r *AvatarRepository) SoftDelete(ctx context.Context, avatarID string) error {
+	query := `
+		UPDATE avatars
+		SET deleted_at = NOW()
+		WHERE id = $1
+	`
+	_, err := r.db.Exec(ctx, query, avatarID)
 	return err
 }
 
@@ -87,39 +98,21 @@ func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]dom
 
 func (r *AvatarRepository) UpdateProcessingStatus(ctx context.Context, id string, status string) error {
 	query := `
-	UPDATE avatars
-	SET processing_status = $1, updated_at = NOW()
-	WHERE id = $2 AND deleted_at IS NULL
+		UPDATE avatars
+		SET processing_status = $1, updated_at = NOW()
+		WHERE id = $2
 	`
-
-	cmdTag, err := r.db.Exec(ctx, query, status, id)
-	if err != nil {
-		return err
-	}
-
-	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("avatar not found")
-	}
-
-	return nil
+	_, err := r.db.Exec(ctx, query, status, id)
+	return err
 }
 
 func (r *AvatarRepository) UpdateThumbnails(ctx context.Context, id string, thumbs map[string]string) error {
-	data, err := json.Marshal(thumbs)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.db.Exec(ctx,
-		`UPDATE avatars
-		 SET thumbnail_s3_keys = $1,
-		     processing_status = 'completed',
-		     updated_at = NOW()
-		 WHERE id = $2`,
-		data,
-		id,
-	)
-
+	query := `
+		UPDATE avatars
+		SET thumbnail_s3_keys = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := r.db.Exec(ctx, query, thumbs, id)
 	return err
 }
 

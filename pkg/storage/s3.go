@@ -48,3 +48,19 @@ func (s *S3) Health(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (s *S3) Exists(ctx context.Context, key string) (bool, error) {
+	_, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		errResp, ok := err.(minio.ErrorResponse)
+		if ok && errResp.Code == "NoSuchKey" {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *S3) Delete(ctx context.Context, key string) error {
+	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
+}
