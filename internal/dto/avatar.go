@@ -38,6 +38,7 @@ type AvatarMetadataResponse struct {
 
 type GalleryItem struct {
 	ID       string
+	UserID   string
 	FileName string
 	URL      string
 }

@@ -55,6 +55,7 @@ func (h *AvatarHandler) WebGallery(w http.ResponseWriter, r *http.Request) {
 		items = append(items, dto.GalleryItem{
 			ID:       a.ID,
 			FileName: a.FileName,
+			UserID:   userID,
 			URL: fmt.Sprintf(
 				"%s/api/v1/avatars/%s?size=300x300&format=webp",
 				baseURL,

@@ -52,7 +52,6 @@ func (s *AvatarService) Upload(
 	userID, fileName, mime string,
 	data []byte,
 ) (*domain.Avatar, error) {
-
 	id := uuid.NewString()
 	key := fmt.Sprintf("avatars/%s/original", id)
 
@@ -193,6 +192,10 @@ func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
 		return err
 	}
 
+	if avatar == nil {
+		return fmt.Errorf("avatar not found")
+	}
+
 	if avatar.UserID != userID {
 		return fmt.Errorf("forbidden")
 	}
@@ -205,6 +208,11 @@ func (s *AvatarService) DeleteByUser(ctx context.Context, userID string) error {
 	if err != nil {
 		return err
 	}
+
+	if avatar == nil {
+		return fmt.Errorf("avatar not found")
+	}
+
 	return s.Delete(ctx, avatar.ID, userID)
 }
 

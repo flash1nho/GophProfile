@@ -52,7 +52,7 @@
         <div id="card-{{ .ID }}" class="group relative rounded-xl overflow-hidden shadow-lg bg-black/30 animate-fade-in">
 
           <!-- ❌ DELETE BUTTON -->
-          <button onclick="deleteAvatar('{{ .ID }}')"
+          <button onclick="deleteAvatar('{{ .ID }}', '{{ .UserID }}')"
             class="absolute top-2 right-2 z-10 bg-black/70 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition">
             ✕
           </button>
@@ -97,19 +97,18 @@
       alert("Copied!");
     }
 
-    async function deleteAvatar(id) {
+    async function deleteAvatar(id, userId) {
       if (!confirm("Delete this avatar?")) return;
 
       try {
         const res = await fetch(`/api/v1/avatars/${id}`, {
           method: "DELETE",
           headers: {
-            "X-User-ID": "1" // ⚠️ как у тебя сейчас
+            "X-User-ID": userId
           }
         });
 
         if (res.status === 204) {
-          // 🔥 удаляем карточку без reload
           const el = document.getElementById(`card-${id}`);
           if (el) {
             el.style.opacity = "0";
