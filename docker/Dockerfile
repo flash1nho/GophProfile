@@ -21,3 +21,5 @@ WORKDIR /root/
 COPY --from=builder /app/server .
 COPY --from=builder /app/worker .
 COPY --from=builder /app/web ./web/
+
+CMD ["./server"]
