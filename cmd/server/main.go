@@ -27,10 +27,16 @@ import (
 
 func main() {
 	log, err := logger.New()
+
 	if err != nil {
 		panic(err)
 	}
-	defer log.Sync()
+
+	defer func() {
+		if err := log.Sync(); err != nil {
+			log.Error("failed to sync logger", zap.Error(err))
+		}
+	}()
 
 	log.Info("starting server")
 
