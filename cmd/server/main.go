@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -32,10 +36,16 @@ func main() {
 
 	cfg := config.Load(log)
 
-	db, err := pgxpool.New(context.Background(), cfg.DBURL)
+	ctx := context.Background()
+
+	db, err := pgxpool.New(ctx, cfg.DBURL)
 	if err != nil {
-		log.Error("db connect error", zap.Error(err))
+		log.Fatal("db connect error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing db")
+		db.Close()
+	}()
 
 	s3Client, err := minio.New(cfg.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3Key, cfg.S3Secret, ""),
@@ -51,11 +61,19 @@ func main() {
 	if err != nil {
 		log.Fatal("rabbit connect error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing rabbit connection")
+		conn.Close()
+	}()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatal("rabbit channel error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing rabbit channel")
+		ch.Close()
+	}()
 
 	rabbit, err := broker.New(ch)
 	if err != nil {
@@ -67,10 +85,33 @@ func main() {
 	handler := handlers.NewAvatarHandler(service)
 
 	router := api.NewRouter(handler, log)
+	addr := ":8080"
 
-	log.Info("server started :8080")
-
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatal("server error", zap.Error(err))
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+
+	go func() {
+		log.Info("http server started", zap.String("addr", addr))
+
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("failed to start server", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-quit
+	log.Info("shutdown signal received", zap.String("signal", sig.String()))
+
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctxShutdown); err != nil {
+		log.Error("server shutdown failed", zap.Error(err))
+	}
+
+	log.Info("server exited properly")
 }

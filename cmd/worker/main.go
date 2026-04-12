@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -27,10 +31,17 @@ func main() {
 
 	cfg := config.Load(log)
 
-	db, err := pgxpool.New(context.Background(), cfg.DBURL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db, err := pgxpool.New(ctx, cfg.DBURL)
 	if err != nil {
 		log.Fatal("db error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing db")
+		db.Close()
+	}()
 
 	s3Client, err := minio.New(cfg.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3Key, cfg.S3Secret, ""),
@@ -49,22 +60,76 @@ func main() {
 	if err != nil {
 		log.Fatal("rabbit connect error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing rabbit connection")
+		conn.Close()
+	}()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatal("rabbit channel error", zap.Error(err))
 	}
+	defer func() {
+		log.Info("closing rabbit channel")
+		ch.Close()
+	}()
 
-	msgs, err := ch.Consume("avatars.queue", "", true, false, false, false, nil)
+	msgs, err := ch.Consume(
+		"avatars.queue",
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
 	if err != nil {
 		log.Fatal("consume error", zap.Error(err))
 	}
 
 	log.Info("worker started")
 
-	for msg := range msgs {
-		if err := w.HandleUploadEvent(msg.Body); err != nil {
-			log.Fatal("worker error", zap.Error(err))
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("worker context cancelled")
+				return
+
+			case msg, ok := <-msgs:
+				if !ok {
+					log.Warn("rabbit channel closed")
+					return
+				}
+
+				log.Debug("message received")
+
+				if err := w.HandleUploadEvent(msg.Body); err != nil {
+					log.Error("worker error", zap.Error(err))
+				}
+			}
 		}
+	}()
+
+	sig := <-quit
+	log.Info("shutdown signal received", zap.String("signal", sig.String()))
+
+	cancel()
+
+	select {
+	case <-done:
+		log.Info("worker stopped gracefully")
+
+	case <-time.After(5 * time.Second):
+		log.Warn("worker shutdown timeout")
 	}
+
+	log.Info("worker exited")
 }
