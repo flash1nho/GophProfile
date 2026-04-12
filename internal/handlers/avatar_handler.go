@@ -41,7 +41,7 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, header, err := r.FormFile("file")
+	file, header, err := r.FormFile("image")
 	if err != nil {
 		httpresp.Error(w, 400, "file is required")
 		return

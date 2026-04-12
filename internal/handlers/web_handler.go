@@ -8,7 +8,7 @@ import (
 )
 
 func (h *AvatarHandler) WebUploadForm(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("web/upload.html")
+	tmpl, err := template.ParseFiles("web/static/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -20,13 +20,16 @@ func (h *AvatarHandler) WebUploadForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AvatarHandler) WebUploadSubmit(w http.ResponseWriter, r *http.Request) {
-	userID := r.FormValue("user_id")
+	userID := r.Header.Get("X-User-ID")
+
+	if userID == "" {
+		userID = r.FormValue("user_id")
+	}
+
 	if userID == "" {
 		http.Error(w, "missing user_id", 400)
 		return
 	}
-
-	r.Header.Set("X-User-ID", userID)
 
 	h.Upload(w, r)
 }
@@ -40,7 +43,7 @@ func (h *AvatarHandler) WebGallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl, err := template.ParseFiles("web/gallery.html")
+	tmpl, err := template.ParseFiles("web/static/gallery.html")
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

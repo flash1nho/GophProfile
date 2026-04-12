@@ -38,7 +38,7 @@ func main() {
 		}
 	}()
 
-	log.Info("starting server")
+	log.Info("starting http server")
 
 	cfg := config.Load(log)
 

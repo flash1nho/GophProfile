@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Gallery</title>
+
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'fade-in': 'fadeIn 0.4s ease-in-out',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: 0, transform: 'scale(0.95)' },
+              '100%': { opacity: 1, transform: 'scale(1)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+
+  <div class="container mx-auto px-4 py-8">
+
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold text-white">User Gallery</h1>
+      <p class="text-white/70 mt-2">All uploaded avatars</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-6">
+
+      {{ if not . }}
+        <div class="text-center text-white/70 py-12">
+          <p class="text-lg">No avatars yet 😢</p>
+        </div>
+      {{ else }}
+
+      <!-- Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+
+        {{ range . }}
+        <div class="group relative rounded-xl overflow-hidden shadow-lg bg-black/30 animate-fade-in">
+
+          <!-- Image -->
+          <img src="{{ .URL }}" alt="avatar"
+               class="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-110" />
+
+          <!-- Overlay -->
+          <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex flex-col justify-end p-3">
+
+            <p class="text-white text-sm truncate">{{ .FileName }}</p>
+
+            <div class="flex gap-2 mt-2">
+              <a href="{{ .URL }}" target="_blank"
+                 class="text-xs bg-blue-600 px-2 py-1 rounded hover:bg-blue-700">
+                View
+              </a>
+
+              <button onclick="copyUrl('{{ .URL }}')"
+                class="text-xs bg-purple-600 px-2 py-1 rounded hover:bg-purple-700">
+                Copy
+              </button>
+            </div>
+
+          </div>
+        </div>
+        {{ end }}
+
+      </div>
+
+      {{ end }}
+
+    </div>
+
+  </div>
+
+  <script>
+    function copyUrl(url) {
+      navigator.clipboard.writeText(url);
+      alert("Copied!");
+    }
+  </script>
+
+</body>
+</html>
