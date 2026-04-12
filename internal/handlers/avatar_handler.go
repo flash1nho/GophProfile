@@ -8,17 +8,20 @@ import (
 
 	"github.com/flash1nho/GophProfile/internal/services"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	httpresp "github.com/flash1nho/GophProfile/pkg/http"
 )
 
 type AvatarHandler struct {
 	svc *services.AvatarService
+	log *zap.Logger
 }
 
-func NewAvatarHandler(svc *services.AvatarService) *AvatarHandler {
+func NewAvatarHandler(svc *services.AvatarService, log *zap.Logger) *AvatarHandler {
 	return &AvatarHandler{
 		svc: svc,
+		log: log,
 	}
 }
 

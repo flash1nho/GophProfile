@@ -75,14 +75,14 @@ func main() {
 		ch.Close()
 	}()
 
-	rabbit, err := broker.New(ch)
+	rabbit, err := broker.New(conn, ch)
 	if err != nil {
 		log.Fatal("rabbit init error", zap.Error(err))
 	}
 
 	repo := repository.NewAvatarRepository(db, log)
 	service := services.NewAvatarService(repo, s3, rabbit, log)
-	handler := handlers.NewAvatarHandler(service)
+	handler := handlers.NewAvatarHandler(service, log)
 
 	router := api.NewRouter(handler, log)
 	addr := ":8080"

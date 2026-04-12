@@ -13,8 +13,9 @@ type Rabbit struct {
 	exchange string
 }
 
-func New(ch *amqp.Channel) (*Rabbit, error) {
+func New(conn *amqp.Connection, ch *amqp.Channel) (*Rabbit, error) {
 	r := &Rabbit{
+		conn:     conn,
 		ch:       ch,
 		exchange: "avatars.exchange",
 	}
