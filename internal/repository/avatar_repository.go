@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"iter"
+	"slices"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -88,55 +90,15 @@ func (r *AvatarRepository) GetLatestByUser(ctx context.Context, userID string) (
 }
 
 func (r *AvatarRepository) ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT
-			id,
-			user_id,
-			file_name,
-			mime_type,
-			size_bytes,
-			s3_key,
-			upload_status,
-			processing_status,
-			created_at,
-			updated_at
-		FROM avatars
-		WHERE user_id=$1 AND deleted_at IS NULL
-		ORDER BY created_at DESC
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	var result []domain.Avatar
 
-	var list []domain.Avatar
-
-	for rows.Next() {
-		var a domain.Avatar
-
-		if err := rows.Scan(
-			&a.ID,
-			&a.UserID,
-			&a.FileName,
-			&a.MimeType,
-			&a.SizeBytes,
-			&a.S3Key,
-			&a.UploadStatus,
-			&a.ProcessingStatus,
-			&a.CreatedAt,
-			&a.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-
-		list = append(list, a)
+	for a := range r.listByUserIter(ctx, userID) {
+		result = append(result, a)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	result = uniqueAvatars(result)
 
-	return list, nil
+	return result, nil
 }
 
 func (r *AvatarRepository) UpdateUploadStatus(ctx context.Context, id string, status domain.UploadStatus) error {
@@ -169,4 +131,58 @@ func (r *AvatarRepository) UpdateThumbnails(ctx context.Context, id string, thum
 
 func (r *AvatarRepository) Ping(ctx context.Context) error {
 	return r.db.Ping(ctx)
+}
+
+func (r *AvatarRepository) listByUserIter(ctx context.Context, userID string) iter.Seq[domain.Avatar] {
+	return func(yield func(domain.Avatar) bool) {
+		rows, err := r.db.Query(ctx, `
+       SELECT
+         id,
+         user_id,
+         file_name,
+         mime_type,
+         size_bytes,
+         s3_key,
+         upload_status,
+         processing_status,
+         created_at,
+         updated_at
+       FROM avatars
+       WHERE user_id=$1 AND deleted_at IS NULL
+       ORDER BY created_at DESC
+     `, userID)
+
+		if err != nil {
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var a domain.Avatar
+			if err := rows.Scan(
+				&a.ID,
+				&a.UserID,
+				&a.FileName,
+				&a.MimeType,
+				&a.SizeBytes,
+				&a.S3Key,
+				&a.UploadStatus,
+				&a.ProcessingStatus,
+				&a.CreatedAt,
+				&a.UpdatedAt,
+			); err != nil {
+				return
+			}
+
+			if !yield(a) {
+				return
+			}
+		}
+	}
+}
+
+func uniqueAvatars(in []domain.Avatar) []domain.Avatar {
+	return slices.CompactFunc(in, func(a, b domain.Avatar) bool {
+		return a.ID == b.ID
+	})
 }

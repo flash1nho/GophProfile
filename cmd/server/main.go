@@ -41,7 +41,7 @@ func main() {
 
 	log.Info("starting http server")
 
-	cfg := config.Load(log)
+	cfg := config.New(log)
 
 	ctx := context.Background()
 
@@ -90,7 +90,7 @@ func main() {
 	repo := repository.NewAvatarRepository(db, log)
 	service := services.NewAvatarService(repo, s3, rabbit, log)
 
-	cache := cache.NewMemoryCache()
+	cache := cache.NewMemoryCache[[]byte]()
 	handler := handlers.NewAvatarHandler(service, log, cache)
 
 	router := api.NewRouter(handler, log)

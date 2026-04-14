@@ -35,7 +35,7 @@ func main() {
 
 	log.Info("starting worker")
 
-	cfg := config.Load(log)
+	cfg := config.New(log)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

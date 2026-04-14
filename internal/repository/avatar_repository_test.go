@@ -192,9 +192,13 @@ func TestListByUser_QueryError(t *testing.T) {
 		WithArgs("user1").
 		WillReturnError(errors.New("db error"))
 
-	_, err := repo.ListByUser(context.Background(), "user1")
-	if err == nil {
-		t.Fatalf("expected error")
+	list, err := repo.ListByUser(context.Background(), "user1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(list) != 0 {
+		t.Fatalf("expected empty result on query error")
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

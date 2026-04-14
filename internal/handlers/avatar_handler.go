@@ -27,7 +27,7 @@ type AvatarHandler struct {
 }
 
 type Cache interface {
-	Get(ctx context.Context, key string) ([]byte, error)
+	Get(ctx context.Context, key string) ([]byte, bool)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
 }
 
@@ -153,7 +153,8 @@ func (h *AvatarHandler) Get(w http.ResponseWriter, r *http.Request) {
 	cacheKey := fmt.Sprintf("avatar:%s:%s:%s", id, sizeParam, formatParam)
 
 	if h.cache != nil {
-		if cached, err := h.cache.Get(r.Context(), cacheKey); err == nil && cached != nil {
+		cached, ok := h.cache.Get(r.Context(), cacheKey)
+		if ok {
 			mime := "image/jpeg"
 			switch formatParam {
 			case "png":
@@ -197,7 +198,7 @@ func (h *AvatarHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.cache != nil {
-		err = h.cache.Set(r.Context(), cacheKey, data, 24*time.Hour)
+		err = h.cache.Set(r.Context(), cacheKey, data, 5*time.Minute)
 
 		if err != nil {
 			h.log.Error("failed to SET cache", zap.String("key", cacheKey))
