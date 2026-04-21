@@ -8,8 +8,8 @@ import (
 
 	"github.com/flash1nho/GophProfile/internal/handlers"
 	"github.com/flash1nho/GophProfile/pkg/middleware"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func NewRouter(h *handlers.AvatarHandler, log *zap.Logger) http.Handler {
@@ -22,7 +22,7 @@ func NewRouter(h *handlers.AvatarHandler, log *zap.Logger) http.Handler {
 	r.Use(middleware.Logger(log))
 
 	r.Use(func(next http.Handler) http.Handler {
-	    return otelhttp.NewHandler(next, "http-request")
+		return otelhttp.NewHandler(next, "http-request")
 	})
 
 	r.Post("/api/v1/avatars", h.Upload)

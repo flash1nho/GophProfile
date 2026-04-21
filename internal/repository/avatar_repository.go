@@ -8,6 +8,8 @@ import (
 	"github.com/flash1nho/GophProfile/internal/domain"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +30,13 @@ func NewAvatarRepository(db DB, log *zap.Logger) *AvatarRepository {
 }
 
 func (r *AvatarRepository) Create(ctx context.Context, a *domain.Avatar) error {
+	ctx, span := otel.Tracer("postgres").Start(ctx, "InsertAvatar")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("operation", "insert"),
+	)
+
 	err := r.db.QueryRow(ctx, `
 	INSERT INTO avatars (id, user_id, file_name, mime_type, size_bytes, s3_key)
 	VALUES ($1,$2,$3,$4,$5,$6)

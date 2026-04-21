@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/minio/minio-go/v7"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type S3 struct {
@@ -18,6 +20,13 @@ func New(client *minio.Client, bucket string) *S3 {
 }
 
 func (s *S3) Upload(ctx context.Context, key string, data []byte, mime string) error {
+	ctx, span := otel.Tracer("s3").Start(ctx, "PutObject")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("bucket", s.bucket),
+	)
+
 	_, err := s.client.PutObject(ctx, s.bucket, key, bytes.NewReader(data), int64(len(data)),
 		minio.PutObjectOptions{ContentType: mime})
 	return err

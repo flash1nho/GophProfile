@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
@@ -32,7 +34,7 @@ type Storage interface {
 }
 
 type Publisher interface {
-	Publish(any) error
+	Publish(ctx context.Context, event any) error
 	Ping() error
 }
 
@@ -52,6 +54,13 @@ func (s *AvatarService) Upload(
 	userID, fileName, mime string,
 	data []byte,
 ) (*domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Upload")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("user_id", userID),
+	)
+
 	id := uuid.NewString()
 	key := fmt.Sprintf("avatars/%s/original", id)
 
@@ -65,6 +74,8 @@ func (s *AvatarService) Upload(
 		UploadStatus:     domain.UploadStatusUploading,
 		ProcessingStatus: domain.ProcessingStatusPending,
 	}
+
+	s.log.Info("upload started", zap.String("user_id", userID))
 
 	if err := s.repo.Create(ctx, avatar); err != nil {
 		s.log.Error("create avatar failed",
@@ -129,12 +140,11 @@ func (s *AvatarService) Upload(
 
 	avatar.UploadStatus = domain.UploadStatusUploaded
 
-	if err := s.pub.Publish(map[string]string{
+	if err := s.pub.Publish(ctx, map[string]string{
 		"avatar_id": id,
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-
 		s.log.Error("publish failed",
 			zap.String("avatar_id", id),
 			zap.Error(err),

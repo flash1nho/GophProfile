@@ -10,6 +10,9 @@ import (
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/pkg/storage"
 	"github.com/flash1nho/GophProfile/pkg/utils"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type repoIface interface {
@@ -60,12 +63,25 @@ type DeleteEvent struct {
 	S3Keys   []string `json:"s3_keys"`
 }
 
-func (w *Worker) HandleUploadEvent(message []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func (w *Worker) HandleUploadEvent(ctx context.Context, message []byte) error {
+	ctx, span := otel.Tracer("worker").Start(ctx, "worker.handle_upload_event")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("messaging.system", "rabbitmq"),
+		attribute.String("messaging.destination", "avatars.queue"),
+	)
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	var upload UploadEvent
 	if err := json.Unmarshal(message, &upload); err == nil && upload.AvatarID != "" && upload.S3Key != "" {
+		span.SetAttributes(
+			attribute.String("avatar.id", upload.AvatarID),
+			attribute.String("s3.key", upload.S3Key),
+		)
+
 		return retry(ctx, 5, time.Second, realTimer{}, func() error {
 			return w.handleUpload(ctx, upload)
 		})
@@ -78,14 +94,27 @@ func (w *Worker) HandleUploadEvent(message []byte) error {
 		})
 	}
 
-	return fmt.Errorf("unknown event")
+	err = fmt.Errorf("unknown event")
+
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+
+	return err
 }
 
 func (w *Worker) handleUpload(ctx context.Context, event UploadEvent) error {
+	ctx, span := otel.Tracer("worker").Start(ctx, "worker.handle_upload")
+	defer span.End()
+
 	avatar, err := w.repo.GetAvatar(ctx, event.AvatarID)
 	if err != nil {
 		return fmt.Errorf("get avatar: %w", err)
 	}
+
+	span.SetAttributes(
+		attribute.String("avatar.id", event.AvatarID),
+		attribute.String("s3.key", event.S3Key),
+	)
 
 	if avatar.ProcessingStatus == domain.ProcessingStatusReady {
 		return nil

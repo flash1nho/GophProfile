@@ -125,7 +125,7 @@ services:
       retries: 5
       start_period: 10s
     volumes:
-      - ./logs:/logs
+      - ../logs:/logs
 
   worker:
     build:
@@ -149,7 +149,7 @@ services:
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
       OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
     volumes:
-      - ./logs:/logs
+      - ../logs:/logs
 
   jaeger:
     image: jaegertracing/all-in-one:1.54
@@ -162,7 +162,7 @@ services:
     image: prom/prometheus
     container_name: avatars-prometheus
     volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../deploy/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
 
@@ -189,8 +189,8 @@ services:
     image: grafana/promtail:2.9.3
     container_name: avatars-promtail
     volumes:
-      - ./logs:/logs
-      - ./deploy/promtail.yml:/etc/promtail/config.yml
+      - ../logs:/logs
+      - ../deploy/promtail.yml:/etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
 
 volumes:

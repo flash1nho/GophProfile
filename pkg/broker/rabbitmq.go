@@ -1,10 +1,12 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
 )
 
 type Rabbit struct {
@@ -57,7 +59,10 @@ func New(conn *amqp.Connection, ch *amqp.Channel) (*Rabbit, error) {
 	return r, nil
 }
 
-func (r *Rabbit) Publish(event any) error {
+func (r *Rabbit) Publish(ctx context.Context, event any) error {
+	ctx, span := otel.Tracer("rabbitmq").Start(ctx, "PublishMessage")
+	defer span.End()
+
 	body, err := json.Marshal(event)
 	if err != nil {
 		return err

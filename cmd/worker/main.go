@@ -18,6 +18,11 @@ import (
 	"github.com/flash1nho/GophProfile/internal/worker"
 	"github.com/flash1nho/GophProfile/pkg/logger"
 	"github.com/flash1nho/GophProfile/pkg/storage"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
+	"github.com/flash1nho/GophProfile/internal/observability"
 )
 
 func main() {
@@ -36,6 +41,9 @@ func main() {
 	log.Info("starting worker")
 
 	cfg := config.New(log)
+
+	shutdownTracer := observability.InitTracer("worker")
+	defer shutdownTracer(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -115,11 +123,29 @@ func main() {
 					return
 				}
 
-				log.Debug("message received")
+				carrier := propagation.MapCarrier{}
 
-				if err := w.HandleUploadEvent(msg.Body); err != nil {
-					log.Error("worker error", zap.Error(err))
+				if msg.Headers != nil {
+					for k, v := range msg.Headers {
+						if str, ok := v.(string); ok {
+							carrier[k] = str
+						}
+					}
 				}
+
+				ctxMsg := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
+				ctxMsg, span := otel.Tracer("worker").Start(ctxMsg, "rabbit.consume.upload_event")
+
+				logger := observability.WithTrace(ctxMsg, log)
+
+				logger.Info("message received")
+
+				if err := w.HandleUploadEvent(ctxMsg, msg.Body); err != nil {
+					span.RecordError(err)
+					logger.Error("worker error", zap.Error(err))
+				}
+
+				span.End()
 			}
 		}
 	}()
