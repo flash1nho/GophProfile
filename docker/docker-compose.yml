@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:15
     container_name: avatars-postgres
@@ -100,6 +99,15 @@ services:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
+      jaeger:
+        condition:
+          service_healthy
+      prometheus:
+        condition:
+          service_healthy
+      loki:
+        condition:
+          service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -109,12 +117,15 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
+      OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health"]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - ./logs:/logs
 
   worker:
     build:
@@ -125,6 +136,9 @@ services:
     depends_on:
       server:
         condition: service_healthy
+      jaeger:
+        condition:
+          service_healthy
     command: ["./worker"]
     environment:
       DB_URL: postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
@@ -133,6 +147,51 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
+      OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+    volumes:
+      - ./logs:/logs
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: avatars-jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+
+  prometheus:
+    image: prom/prometheus
+    container_name: avatars-prometheus
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana
+    container_name: avatars-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition:
+          service_healthy
+      loki:
+        condition:
+          service_healthy
+
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: avatars-loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: avatars-promtail
+    volumes:
+      - ./logs:/logs
+      - ./deploy/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
 
 volumes:
   pg_data:

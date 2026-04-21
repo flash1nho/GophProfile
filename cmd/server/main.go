@@ -20,6 +20,7 @@ import (
 	"github.com/flash1nho/GophProfile/internal/handlers"
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/internal/services"
+	"github.com/flash1nho/GophProfile/internal/observability"
 	"github.com/flash1nho/GophProfile/pkg/broker"
 	"github.com/flash1nho/GophProfile/pkg/cache"
 	"github.com/flash1nho/GophProfile/pkg/logger"
@@ -28,6 +29,7 @@ import (
 
 func main() {
 	log, err := logger.New()
+	log = observability.WithTrace(ctx, log)
 
 	if err != nil {
 		panic(err)
@@ -41,11 +43,18 @@ func main() {
 
 	log.Info("starting http server")
 
-	cfg := config.New(log)
-
 	ctx := context.Background()
 
-	db, err := pgxpool.New(ctx, cfg.DBURL)
+	shutdownTracer := observability.InitTracer("gophprofile")
+	defer func() {
+	    if err := shutdownTracer(ctx); err != nil {
+	        log.Error("tracer shutdown failed", zap.Error(err))
+	    }
+	}()
+
+	cfg := config.New(log)
+
+	db, err := observability.NewPGXPool(ctx, cfg.DBURL)
 	if err != nil {
 		log.Fatal("db connect error", zap.Error(err))
 	}
@@ -58,6 +67,7 @@ func main() {
 		Creds:  credentials.NewStaticV4(cfg.S3Key, cfg.S3Secret, ""),
 		Secure: false,
 	})
+	s3Client = observability.WrapMinioClient(s3Client)
 	if err != nil {
 		log.Fatal("s3 init error", zap.Error(err))
 	}
@@ -83,6 +93,7 @@ func main() {
 	}()
 
 	rabbit, err := broker.New(conn, ch)
+	rabbit = observability.WrapBroker(rabbit)
 	if err != nil {
 		log.Fatal("rabbit init error", zap.Error(err))
 	}
