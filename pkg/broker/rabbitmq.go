@@ -60,7 +60,7 @@ func New(conn *amqp.Connection, ch *amqp.Channel) (*Rabbit, error) {
 }
 
 func (r *Rabbit) Publish(ctx context.Context, event any) error {
-	ctx, span := otel.Tracer("rabbitmq").Start(ctx, "PublishMessage")
+	_, span := otel.Tracer("rabbitmq").Start(ctx, "PublishMessage")
 	defer span.End()
 
 	body, err := json.Marshal(event)

@@ -82,6 +82,18 @@ services:
       up
       "
 
+  otel-collector:
+    image: otel/opentelemetry-collector:0.102.0
+    container_name: avatars-otel
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ../deploy/otel-collector.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4318:4318"
+    depends_on:
+      jaeger:
+        condition: service_healthy
+
   server:
     build:
       context: ..
@@ -99,15 +111,8 @@ services:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
-      jaeger:
-        condition:
-          service_healthy
-      prometheus:
-        condition:
-          service_healthy
-      loki:
-        condition:
-          service_healthy
+      otel-collector:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
@@ -117,7 +122,7 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
-      OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health"]
       interval: 5s
@@ -133,13 +138,12 @@ services:
       dockerfile: docker/Dockerfile
     container_name: avatars-worker
     restart: unless-stopped
+    command: ["./worker"]
     depends_on:
       server:
         condition: service_healthy
-      jaeger:
-        condition:
-          service_healthy
-    command: ["./worker"]
+      otel-collector:
+        condition: service_started
     environment:
       DB_URL: postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
       S3_ENDPOINT: minio:9000
@@ -147,7 +151,7 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
-      OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     volumes:
       - ../logs:/logs
 
@@ -156,7 +160,7 @@ services:
     container_name: avatars-jaeger
     ports:
       - "16686:16686"
-      - "14268:14268"
+      - "14250:14250"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:16686 || exit 1"]
       interval: 5s
@@ -183,11 +187,9 @@ services:
       - "3000:3000"
     depends_on:
       prometheus:
-        condition:
-          service_healthy
+        condition: service_healthy
       loki:
-        condition:
-          service_healthy
+        condition: service_healthy
 
   loki:
     image: grafana/loki:2.9.3
