@@ -70,8 +70,8 @@ type mockPub struct {
 	err error
 }
 
-func (m *mockPub) Ping() error       { return m.err }
-func (m *mockPub) Publish(any) error { return nil }
+func (m *mockPub) Ping() error                              { return m.err }
+func (m *mockPub) Publish(ctx context.Context, v any) error { return nil }
 
 func TestHealth_AllOK(t *testing.T) {
 	svc := services.NewAvatarService(

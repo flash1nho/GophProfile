@@ -44,7 +44,11 @@ func main() {
 	cfg := config.New(log)
 
 	shutdownTracer := observability.InitTracer("worker")
-	defer shutdownTracer(context.Background())
+	defer func() {
+		if err := shutdownTracer(context.Background()); err != nil {
+			log.Error("tracer shutdown failed", zap.Error(err))
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
