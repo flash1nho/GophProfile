@@ -94,7 +94,7 @@ func (w *Worker) HandleUploadEvent(ctx context.Context, message []byte) error {
 		})
 	}
 
-	err = fmt.Errorf("unknown event")
+	err := fmt.Errorf("unknown event")
 
 	span.RecordError(err)
 	span.SetStatus(codes.Error, err.Error())

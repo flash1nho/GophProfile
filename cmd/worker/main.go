@@ -20,6 +20,8 @@ import (
 	"github.com/flash1nho/GophProfile/pkg/storage"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/flash1nho/GophProfile/internal/observability"
@@ -27,7 +29,6 @@ import (
 
 func main() {
 	log, err := logger.New()
-
 	if err != nil {
 		panic(err)
 	}
@@ -76,7 +77,9 @@ func main() {
 	}
 	defer func() {
 		log.Info("closing rabbit connection")
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			log.Error("failed to close rabbit connection", zap.Error(err))
+		}
 	}()
 
 	ch, err := conn.Channel()
@@ -85,13 +88,15 @@ func main() {
 	}
 	defer func() {
 		log.Info("closing rabbit channel")
-		ch.Close()
+		if err := ch.Close(); err != nil {
+			log.Error("failed to close rabbit channel", zap.Error(err))
+		}
 	}()
 
 	msgs, err := ch.Consume(
 		"avatars.queue",
 		"",
-		true,
+		false,
 		false,
 		false,
 		false,
@@ -107,6 +112,14 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	done := make(chan struct{})
+
+	go func() {
+		<-ctx.Done()
+		log.Info("closing rabbit channel (shutdown)")
+		if err := ch.Close(); err != nil {
+			log.Error("failed to close channel on shutdown", zap.Error(err))
+		}
+	}()
 
 	go func() {
 		defer close(done)
@@ -133,16 +146,35 @@ func main() {
 					}
 				}
 
-				ctxMsg := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
+				ctxMsg := otel.GetTextMapPropagator().Extract(ctx, carrier)
 				ctxMsg, span := otel.Tracer("worker").Start(ctxMsg, "rabbit.consume.upload_event")
+
+				span.SetAttributes(
+					attribute.String("messaging.system", "rabbitmq"),
+					attribute.String("messaging.destination", "avatars.queue"),
+					attribute.String("messaging.message_id", msg.MessageId),
+					attribute.Int("messaging.body_size", len(msg.Body)),
+				)
 
 				logger := observability.WithTrace(ctxMsg, log)
 
-				logger.Info("message received")
+				logger.Info("message received",
+					zap.Int("body_size", len(msg.Body)),
+					zap.String("message_id", msg.MessageId),
+				)
 
 				if err := w.HandleUploadEvent(ctxMsg, msg.Body); err != nil {
 					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					logger.Error("worker error", zap.Error(err))
+
+					if err := msg.Nack(false, true); err != nil {
+						logger.Error("failed to nack message", zap.Error(err))
+					}
+				} else {
+					if err := msg.Ack(false); err != nil {
+						logger.Error("failed to ack message", zap.Error(err))
+					}
 				}
 
 				span.End()
