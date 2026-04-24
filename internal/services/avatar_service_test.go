@@ -84,8 +84,8 @@ type mockPublisher struct {
 	err error
 }
 
-func (m *mockPublisher) Publish(v any) error { return m.err }
-func (m *mockPublisher) Ping() error         { return nil }
+func (m *mockPublisher) Publish(ctx context.Context, v any) error { return m.err }
+func (m *mockPublisher) Ping() error                              { return nil }
 
 func TestUpload_AllBranches(t *testing.T) {
 	tests := []struct {

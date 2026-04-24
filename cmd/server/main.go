@@ -18,6 +18,7 @@ import (
 	"github.com/flash1nho/GophProfile/internal/api"
 	"github.com/flash1nho/GophProfile/internal/config"
 	"github.com/flash1nho/GophProfile/internal/handlers"
+	"github.com/flash1nho/GophProfile/internal/observability"
 	"github.com/flash1nho/GophProfile/internal/repository"
 	"github.com/flash1nho/GophProfile/internal/services"
 	"github.com/flash1nho/GophProfile/pkg/broker"
@@ -41,11 +42,29 @@ func main() {
 
 	log.Info("starting http server")
 
+	ctx := context.Background()
 	cfg := config.New(log)
 
-	ctx := context.Background()
+	shutdownTracer := observability.InitTracer("gophprofile", cfg)
+	defer func() {
+		if err := shutdownTracer(ctx); err != nil {
+			log.Error("tracer shutdown failed", zap.Error(err))
+		}
+	}()
 
-	db, err := pgxpool.New(ctx, cfg.DBURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DBURL)
+	if err != nil {
+		log.Fatal("failed to parse db config", zap.Error(err))
+	}
+
+	poolConfig.MaxConns = cfg.DBMaxConns
+	poolConfig.MinConns = cfg.DBMinConns
+	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+	poolConfig.HealthCheckPeriod = cfg.DBHealthCheckPeriod
+	poolConfig.ConnConfig.ConnectTimeout = cfg.DBConnectTimeout
+
+	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		log.Fatal("db connect error", zap.Error(err))
 	}

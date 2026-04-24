@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
+	"github.com/flash1nho/GophProfile/internal/observability"
 	"github.com/google/uuid"
 )
 
@@ -32,7 +35,7 @@ type Storage interface {
 }
 
 type Publisher interface {
-	Publish(any) error
+	Publish(ctx context.Context, event any) error
 	Ping() error
 }
 
@@ -52,6 +55,13 @@ func (s *AvatarService) Upload(
 	userID, fileName, mime string,
 	data []byte,
 ) (*domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Upload")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("user_id", userID),
+	)
+
 	id := uuid.NewString()
 	key := fmt.Sprintf("avatars/%s/original", id)
 
@@ -66,11 +76,16 @@ func (s *AvatarService) Upload(
 		ProcessingStatus: domain.ProcessingStatusPending,
 	}
 
+	s.log.Info("upload started", zap.String("user_id", userID))
+
 	if err := s.repo.Create(ctx, avatar); err != nil {
 		s.log.Error("create avatar failed",
 			zap.String("avatar_id", id),
 			zap.Error(err),
 		)
+
+		observability.UploadsTotal.WithLabelValues("error").Inc()
+
 		return nil, fmt.Errorf("create avatar: %w", err)
 	}
 
@@ -93,6 +108,8 @@ func (s *AvatarService) Upload(
 				zap.Error(errProc),
 			)
 		}
+
+		observability.UploadsTotal.WithLabelValues("error").Inc()
 
 		return nil, fmt.Errorf("upload to s3: %w", err)
 	}
@@ -124,17 +141,18 @@ func (s *AvatarService) Upload(
 			)
 		}
 
+		observability.UploadsTotal.WithLabelValues("error").Inc()
+
 		return nil, fmt.Errorf("update upload status: %w", err)
 	}
 
 	avatar.UploadStatus = domain.UploadStatusUploaded
 
-	if err := s.pub.Publish(map[string]string{
+	if err := s.pub.Publish(ctx, map[string]string{
 		"avatar_id": id,
 		"user_id":   userID,
 		"s3_key":    key,
 	}); err != nil {
-
 		s.log.Error("publish failed",
 			zap.String("avatar_id", id),
 			zap.Error(err),
@@ -147,13 +165,24 @@ func (s *AvatarService) Upload(
 			)
 		}
 
+		observability.UploadsTotal.WithLabelValues("partial").Inc()
+
 		return avatar, fmt.Errorf("publish event: %w", err)
 	}
+
+	observability.UploadsTotal.WithLabelValues("success").Inc()
 
 	return avatar, nil
 }
 
 func (s *AvatarService) Get(ctx context.Context, id, size string) ([]byte, string, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Get")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+	)
+
 	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return nil, "", err
@@ -187,6 +216,14 @@ func (s *AvatarService) GetByUser(ctx context.Context, userID string) (*domain.A
 }
 
 func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Delete")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+		attribute.String("user_id", userID),
+	)
+
 	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return err
@@ -217,10 +254,24 @@ func (s *AvatarService) DeleteByUser(ctx context.Context, userID string) error {
 }
 
 func (s *AvatarService) ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "ListByUser")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("user_id", userID),
+	)
+
 	return s.repo.ListByUser(ctx, userID)
 }
 
 func (s *AvatarService) GetMetadata(ctx context.Context, id string) (*domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "GetMetadata")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+	)
+
 	return s.repo.GetAvatar(ctx, id)
 }
 

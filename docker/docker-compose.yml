@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:15
     container_name: avatars-postgres
@@ -83,6 +82,18 @@ services:
       up
       "
 
+  otel-collector:
+    image: otel/opentelemetry-collector:0.102.0
+    container_name: avatars-otel
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ../deploy/otel-collector.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4318:4318"
+    depends_on:
+      jaeger:
+        condition: service_healthy
+
   server:
     build:
       context: ..
@@ -100,6 +111,8 @@ services:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
@@ -109,12 +122,15 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health"]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - ../logs:/logs
 
   worker:
     build:
@@ -122,10 +138,12 @@ services:
       dockerfile: docker/Dockerfile
     container_name: avatars-worker
     restart: unless-stopped
+    command: ["./worker"]
     depends_on:
       server:
         condition: service_healthy
-    command: ["./worker"]
+      otel-collector:
+        condition: service_started
     environment:
       DB_URL: postgres://gophprofile:gophprofile@postgres:5432/avatars?sslmode=disable
       S3_ENDPOINT: minio:9000
@@ -133,6 +151,64 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
+    volumes:
+      - ../logs:/logs
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: avatars-jaeger
+    ports:
+      - "16686:16686"
+      - "14250:14250"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:16686 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus
+    container_name: avatars-prometheus
+    volumes:
+      - ../deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/ready || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana
+    container_name: avatars-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: avatars-loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: avatars-promtail
+    volumes:
+      - ../logs:/logs
+      - ../deploy/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
 
 volumes:
   pg_data:
