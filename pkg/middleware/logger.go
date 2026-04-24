@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flash1nho/GophProfile/internal/observability"
 	"go.uber.org/zap"
 )
 
@@ -28,13 +29,15 @@ func Logger(log *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+			ctx := observability.InjectRequestID(r.Context(), r.Header.Get("X-Request-ID"))
+			ctx = observability.InjectLogger(ctx, log)
 
 			rw := &responseWriter{
 				ResponseWriter: w,
 				status:         http.StatusOK,
 			}
 
-			next.ServeHTTP(rw, r)
+			next.ServeHTTP(rw, r.WithContext(ctx))
 
 			duration := time.Since(start)
 

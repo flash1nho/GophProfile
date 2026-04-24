@@ -122,7 +122,7 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health"]
       interval: 5s
@@ -151,7 +151,7 @@ services:
       S3_SECRET: minioadmin
       S3_BUCKET: avatars
       RABBIT_URL: amqp://guest:guest@rabbitmq:5672/
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
     volumes:
       - ../logs:/logs
 

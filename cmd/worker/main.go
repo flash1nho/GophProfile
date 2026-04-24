@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -43,7 +44,7 @@ func main() {
 
 	cfg := config.New(log)
 
-	shutdownTracer := observability.InitTracer("worker")
+	shutdownTracer := observability.InitTracer("worker", cfg)
 	defer func() {
 		if err := shutdownTracer(context.Background()); err != nil {
 			log.Error("tracer shutdown failed", zap.Error(err))
@@ -53,9 +54,21 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := pgxpool.New(ctx, cfg.DBURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DBURL)
 	if err != nil {
-		log.Fatal("db error", zap.Error(err))
+		log.Fatal("failed to parse db config", zap.Error(err))
+	}
+
+	poolConfig.MaxConns = cfg.DBMaxConns
+	poolConfig.MinConns = cfg.DBMinConns
+	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+	poolConfig.HealthCheckPeriod = cfg.DBHealthCheckPeriod
+	poolConfig.ConnConfig.ConnectTimeout = cfg.DBConnectTimeout
+
+	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		log.Fatal("db connect error", zap.Error(err))
 	}
 	defer func() {
 		log.Info("closing db")
@@ -144,14 +157,14 @@ func main() {
 
 				if msg.Headers != nil {
 					for k, v := range msg.Headers {
-						if str, ok := v.(string); ok {
-							carrier[k] = str
-						}
+						carrier[k] = headerValueToString(v)
 					}
 				}
 
 				ctxMsg := otel.GetTextMapPropagator().Extract(ctx, carrier)
 				ctxMsg, span := otel.Tracer("worker").Start(ctxMsg, "rabbit.consume.upload_event")
+				ctxMsg = observability.InjectLogger(ctxMsg, log)
+				logger := observability.FromContext(ctxMsg)
 
 				span.SetAttributes(
 					attribute.String("messaging.system", "rabbitmq"),
@@ -159,8 +172,6 @@ func main() {
 					attribute.String("messaging.message_id", msg.MessageId),
 					attribute.Int("messaging.body_size", len(msg.Body)),
 				)
-
-				logger := observability.WithTrace(ctxMsg, log)
 
 				logger.Info("message received",
 					zap.Int("body_size", len(msg.Body)),
@@ -200,4 +211,17 @@ func main() {
 	}
 
 	log.Info("worker exited")
+}
+
+func headerValueToString(v any) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	case fmt.Stringer:
+		return val.String()
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }

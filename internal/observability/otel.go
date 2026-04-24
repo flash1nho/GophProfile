@@ -11,14 +11,16 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/flash1nho/GophProfile/internal/config"
+
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 )
 
-func InitTracer(serviceName string) func(context.Context) error {
+func InitTracer(serviceName string, cfg *config.Config) func(context.Context) error {
 	ctx := context.Background()
 
 	exp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint("otel-collector:4318"),
+		otlptracehttp.WithEndpoint(cfg.OtelExporterOtlpEndpoint),
 		otlptracehttp.WithInsecure(),
 		otlptracehttp.WithTimeout(5*time.Second),
 	)

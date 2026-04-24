@@ -43,17 +43,28 @@ func main() {
 	log.Info("starting http server")
 
 	ctx := context.Background()
+	cfg := config.New(log)
 
-	shutdownTracer := observability.InitTracer("gophprofile")
+	shutdownTracer := observability.InitTracer("gophprofile", cfg)
 	defer func() {
 		if err := shutdownTracer(ctx); err != nil {
 			log.Error("tracer shutdown failed", zap.Error(err))
 		}
 	}()
 
-	cfg := config.New(log)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DBURL)
+	if err != nil {
+		log.Fatal("failed to parse db config", zap.Error(err))
+	}
 
-	db, err := pgxpool.New(ctx, cfg.DBURL)
+	poolConfig.MaxConns = cfg.DBMaxConns
+	poolConfig.MinConns = cfg.DBMinConns
+	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+	poolConfig.HealthCheckPeriod = cfg.DBHealthCheckPeriod
+	poolConfig.ConnConfig.ConnectTimeout = cfg.DBConnectTimeout
+
+	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		log.Fatal("db connect error", zap.Error(err))
 	}

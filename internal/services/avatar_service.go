@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/flash1nho/GophProfile/internal/domain"
+	"github.com/flash1nho/GophProfile/internal/observability"
 	"github.com/google/uuid"
 )
 
@@ -82,6 +83,9 @@ func (s *AvatarService) Upload(
 			zap.String("avatar_id", id),
 			zap.Error(err),
 		)
+
+		observability.UploadsTotal.WithLabelValues("error").Inc()
+
 		return nil, fmt.Errorf("create avatar: %w", err)
 	}
 
@@ -104,6 +108,8 @@ func (s *AvatarService) Upload(
 				zap.Error(errProc),
 			)
 		}
+
+		observability.UploadsTotal.WithLabelValues("error").Inc()
 
 		return nil, fmt.Errorf("upload to s3: %w", err)
 	}
@@ -135,6 +141,8 @@ func (s *AvatarService) Upload(
 			)
 		}
 
+		observability.UploadsTotal.WithLabelValues("error").Inc()
+
 		return nil, fmt.Errorf("update upload status: %w", err)
 	}
 
@@ -157,13 +165,24 @@ func (s *AvatarService) Upload(
 			)
 		}
 
+		observability.UploadsTotal.WithLabelValues("partial").Inc()
+
 		return avatar, fmt.Errorf("publish event: %w", err)
 	}
+
+	observability.UploadsTotal.WithLabelValues("success").Inc()
 
 	return avatar, nil
 }
 
 func (s *AvatarService) Get(ctx context.Context, id, size string) ([]byte, string, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Get")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+	)
+
 	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return nil, "", err
@@ -197,6 +216,14 @@ func (s *AvatarService) GetByUser(ctx context.Context, userID string) (*domain.A
 }
 
 func (s *AvatarService) Delete(ctx context.Context, id, userID string) error {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "Delete")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+		attribute.String("user_id", userID),
+	)
+
 	avatar, err := s.repo.GetAvatar(ctx, id)
 	if err != nil {
 		return err
@@ -227,10 +254,24 @@ func (s *AvatarService) DeleteByUser(ctx context.Context, userID string) error {
 }
 
 func (s *AvatarService) ListByUser(ctx context.Context, userID string) ([]domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "ListByUser")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("user_id", userID),
+	)
+
 	return s.repo.ListByUser(ctx, userID)
 }
 
 func (s *AvatarService) GetMetadata(ctx context.Context, id string) (*domain.Avatar, error) {
+	ctx, span := otel.Tracer("avatar-service").Start(ctx, "GetMetadata")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("id", id),
+	)
+
 	return s.repo.GetAvatar(ctx, id)
 }
 
