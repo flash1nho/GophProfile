@@ -1,0 +1,13 @@
+apiVersion: v2
+name: gophprofile
+description: A Helm chart for GophProfile Kubernetes deployment
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - gophprofile
+  - avatar
+  - kubernetes
+maintainers:
+  - name: flash1nho
+    email: okunev1988@gmail.com
