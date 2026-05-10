@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gophprofile-api
+  namespace: gophprofile
+
+data:
+  APP_ENV: production
+  HTTP_PORT: "8080"
+  METRICS_PORT: "9090"
+  LOG_LEVEL: info
+
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: gophprofile
+
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+
+  MINIO_ENDPOINT: minio:9000
+  MINIO_BUCKET: avatars
+
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317

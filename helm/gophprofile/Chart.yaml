@@ -1,0 +1,7 @@
+apiVersion: v2
+name: gophprofile
+version: 0.1.0
+appVersion: "1.0.0"
+type: application
+
+description: Production-ready Helm chart for GophProfile
