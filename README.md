@@ -148,6 +148,31 @@ go test ./...
 
 ---
 
+## 🚀 Kubernetes Deployment
+
+### Prerequisites
+- Kubernetes cluster (1.20+)
+- Helm 3.x
+- kubectl configured
+
+### Deploy with Helm
+\`\`\`bash
+helm install gophprofile ./helm/gophprofile -n gophprofile --create-namespace
+\`\`\`
+
+### Local Development (Rancher Desktop)
+1. Enable Kubernetes in Rancher Desktop settings
+2. Run: \`helm install gophprofile ./helm/gophprofile -n gophprofile --create-namespace\`
+3. Port-forward: \`kubectl port-forward svc/gophprofile-api 8080:80 -n gophprofile\`
+
+### Verify Deployment
+\`\`\`bash
+kubectl get pods -n gophprofile
+kubectl logs -f deployment/gophprofile-api -n gophprofile
+\`\`\`
+
+---
+
 ## 📄 License
 
 MIT
