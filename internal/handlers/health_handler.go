@@ -55,6 +55,11 @@ func (h *AvatarHandler) Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AvatarHandler) Readyz(w http.ResponseWriter, r *http.Request) {
+	if IsShuttingDown() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	status := map[string]string{"status": "ready"}
 
 	httpresp.JSON(w, http.StatusOK, status)

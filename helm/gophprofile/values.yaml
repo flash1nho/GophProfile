@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: flash1nho/gophprofile
-  tag: latest
+  tag: "1.0.0"
   pullPolicy: IfNotPresent
 
 service:
@@ -68,3 +68,22 @@ secrets:
   rabbitUrl: ""
   s3Key: ""
   s3Secret: ""
+
+probes:
+  startup:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+
+  liveness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2

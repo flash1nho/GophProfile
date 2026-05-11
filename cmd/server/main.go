@@ -135,6 +135,7 @@ func main() {
 	log.Info("shutdown signal received", zap.String("signal", sig.String()))
 
 	log.Info("waiting for load balancer deregistration")
+	handlers.SetShuttingDown()
 	time.Sleep(10 * time.Second)
 
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

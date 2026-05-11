@@ -22,6 +22,11 @@ spec:
         - protocol: TCP
           port: 8080
 
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+
   egress:
     - to:
         - namespaceSelector: {}
