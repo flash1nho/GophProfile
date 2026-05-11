@@ -36,6 +36,8 @@ func NewRouter(h *handlers.AvatarHandler, log *zap.Logger) http.Handler {
 	r.Get("/api/v1/users/{user_id}/avatars", h.ListByUser)
 
 	r.Get("/health", h.Health)
+	r.Get("/health/live", h.Healthz)
+	r.Get("/health/ready", h.Readyz)
 
 	r.Get("/web/upload", h.WebUploadForm)
 	r.Post("/web/upload", h.WebUploadSubmit)

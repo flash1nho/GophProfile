@@ -15,70 +15,46 @@ spec:
     - Ingress
     - Egress
 
-  # Allow ingress from ingress controller only
   ingress:
     - from:
-      - namespaceSelector:
-          matchLabels:
-            name: ingress-nginx
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 8080
-      - protocol: TCP
-        port: 9090
+        - protocol: TCP
+          port: 8080
 
-  # Restrict egress to necessary services
   egress:
-    # DNS
     - to:
-      - namespaceSelector: {}
+        - namespaceSelector: {}
       ports:
-      - protocol: UDP
-        port: 53
+        - protocol: UDP
+          port: 53
 
-    # PostgreSQL
-    {{- if .Values.postgresql.enabled }}
     - to:
-      - podSelector:
-          matchLabels:
-            app: postgres
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 5432
-    {{- end }}
+        - protocol: TCP
+          port: 53
 
-    # RabbitMQ
-    {{- if .Values.rabbitmq.enabled }}
     - to:
-      - podSelector:
-          matchLabels:
-            app: rabbitmq
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 5672
-    {{- end }}
+        - protocol: TCP
+          port: 443
 
-    # MinIO
-    {{- if .Values.minio.enabled }}
     - to:
-      - podSelector:
-          matchLabels:
-            app: minio
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 9000
-    {{- end }}
+        - protocol: TCP
+          port: 5432
 
-    # External HTTPS (for external registries, etc)
     - to:
-      - namespaceSelector: {}
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 443
+        - protocol: TCP
+          port: 5672
 
-    # External DNS
     - to:
-      - namespaceSelector: {}
+        - namespaceSelector: {}
       ports:
-      - protocol: TCP
-        port: 53
+        - protocol: TCP
+          port: 9000

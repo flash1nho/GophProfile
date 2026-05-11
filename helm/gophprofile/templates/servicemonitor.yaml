@@ -13,13 +13,8 @@ spec:
       {{- include "gophprofile.selectorLabels" . | nindent 6 }}
 
   endpoints:
-    - port: metrics
+    - port: http
       path: /metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval | default "15s" }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
-      relabelings:
-        - sourceLabels: [__meta_kubernetes_pod_name]
-          targetLabel: pod
-        - sourceLabels: [__meta_kubernetes_namespace]
-          targetLabel: namespace
 {{- end }}

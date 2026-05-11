@@ -17,8 +17,3 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: 8080
       protocol: TCP
-
-    - name: metrics
-      port: 9090
-      targetPort: 9090
-      protocol: TCP

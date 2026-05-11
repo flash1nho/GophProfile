@@ -12,11 +12,17 @@ service:
 ingress:
   enabled: true
   className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+
   hosts:
     - host: gophprofile.local
       paths:
         - path: /
           pathType: Prefix
+
   tls: []
 
 autoscaling:
@@ -27,36 +33,15 @@ autoscaling:
   memoryUtilization: 80
 
 resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
   limits:
     cpu: 500m
     memory: 512Mi
-  requests:
-    cpu: 250m
-    memory: 256Mi
 
 env: []
-
-postgresql:
-  enabled: false
-  host: postgres
-  port: 5432
-  database: gophprofile
-  user: gophprofile
-  password: "changeme"
-
-rabbitmq:
-  enabled: false
-  host: rabbitmq
-  port: 5672
-  user: guest
-  password: guest
-
-minio:
-  enabled: false
-  endpoint: minio:9000
-  bucket: avatars
-  user: minioadmin
-  password: minioadmin
 
 monitoring:
   serviceMonitor:
@@ -68,3 +53,18 @@ podDisruptionBudget:
   minAvailable: 1
 
 terminationGracePeriodSeconds: 30
+
+postgresql:
+  enabled: false
+
+rabbitmq:
+  enabled: false
+
+minio:
+  enabled: false
+
+secrets:
+  dbUrl: ""
+  rabbitUrl: ""
+  s3Key: ""
+  s3Secret: ""
