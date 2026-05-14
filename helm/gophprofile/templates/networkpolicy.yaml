@@ -17,7 +17,9 @@ spec:
 
   ingress:
     - from:
-        - namespaceSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-controller
       ports:
         - protocol: TCP
           port: 8080
@@ -26,6 +28,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
 
   egress:
     - to:

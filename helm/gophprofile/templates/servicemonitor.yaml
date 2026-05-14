@@ -1,6 +1,7 @@
 {{- if .Values.monitoring.serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
+
 metadata:
   name: {{ include "gophprofile.fullname" . }}
   namespace: {{ .Release.Namespace }}
@@ -8,6 +9,12 @@ metadata:
     {{- include "gophprofile.labels" . | nindent 4 }}
 
 spec:
+  jobLabel: app.kubernetes.io/name
+
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+
   selector:
     matchLabels:
       {{- include "gophprofile.selectorLabels" . | nindent 6 }}
@@ -15,6 +22,36 @@ spec:
   endpoints:
     - port: http
       path: /metrics
-      interval: {{ .Values.monitoring.serviceMonitor.interval | default "15s" }}
-      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
+      scheme: http
+
+      interval: {{
+        .Values.monitoring.serviceMonitor.interval
+        | default "15s"
+      }}
+
+      scrapeTimeout: {{
+        .Values.monitoring.serviceMonitor.scrapeTimeout
+        | default "10s"
+      }}
+
+      honorLabels: true
+
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service
+
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "go_gc_duration_seconds.*"
+          action: keep
+
+        - sourceLabels: [__name__]
+          regex: "go_goroutines|process_resident_memory_bytes|http_requests_total"
+          action: keep
 {{- end }}

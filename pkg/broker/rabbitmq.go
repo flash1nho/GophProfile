@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/sony/gobreaker"
+
+	"github.com/flash1nho/GophProfile/pkg/utils"
 	"go.opentelemetry.io/otel"
 )
 
@@ -13,6 +16,7 @@ type Rabbit struct {
 	conn     *amqp.Connection
 	ch       *amqp.Channel
 	exchange string
+	cb       *gobreaker.CircuitBreaker
 }
 
 func New(conn *amqp.Connection, ch *amqp.Channel) (*Rabbit, error) {
@@ -20,6 +24,7 @@ func New(conn *amqp.Connection, ch *amqp.Channel) (*Rabbit, error) {
 		conn:     conn,
 		ch:       ch,
 		exchange: "avatars.exchange",
+		cb:       utils.NewCircuitBreaker("rabbitmq"),
 	}
 
 	if err := ch.ExchangeDeclare(
@@ -68,17 +73,21 @@ func (r *Rabbit) Publish(ctx context.Context, event any) error {
 		return err
 	}
 
-	return r.ch.Publish(
-		r.exchange,
-		"avatar.uploaded",
-		false,
-		false,
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         body,
-			DeliveryMode: amqp.Persistent,
-		},
-	)
+	_, err = r.cb.Execute(func() (any, error) {
+		return nil, r.ch.Publish(
+			r.exchange,
+			"avatar.uploaded",
+			false,
+			false,
+			amqp.Publishing{
+				ContentType:  "application/json",
+				Body:         body,
+				DeliveryMode: amqp.Persistent,
+			},
+		)
+	})
+
+	return err
 }
 
 func (r *Rabbit) Ping() error {

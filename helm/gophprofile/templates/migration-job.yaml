@@ -12,9 +12,24 @@ spec:
 
       containers:
         - name: migrate
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command:
-            - migrate
-          envFrom:
-            - secretRef:
-                name: {{ include "gophprofile.fullname" . }}
+          image: migrate/migrate:v4.17.0
+          args:
+            - -path=/migrations
+            - -database=$(DB_URL)
+            - up
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gophprofile.fullname" . }}
+                  key: DB_URL
+
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+
+      volumes:
+        - name: migrations
+          configMap:
+            name: {{ include "gophprofile.fullname" . }}-migrations
