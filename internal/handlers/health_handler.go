@@ -47,3 +47,20 @@ func (h *AvatarHandler) Health(w http.ResponseWriter, r *http.Request) {
 
 	httpresp.JSON(w, httpStatus, status)
 }
+
+func (h *AvatarHandler) Healthz(w http.ResponseWriter, r *http.Request) {
+	status := map[string]string{"status": "ok"}
+
+	httpresp.JSON(w, http.StatusOK, status)
+}
+
+func (h *AvatarHandler) Readyz(w http.ResponseWriter, r *http.Request) {
+	if IsShuttingDown() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	status := map[string]string{"status": "ready"}
+
+	httpresp.JSON(w, http.StatusOK, status)
+}

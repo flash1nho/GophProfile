@@ -134,6 +134,8 @@ func main() {
 	sig := <-quit
 	log.Info("shutdown signal received", zap.String("signal", sig.String()))
 
+	handlers.SetShuttingDown()
+
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

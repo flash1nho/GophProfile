@@ -1,0 +1,70 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "gophprofile.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gophprofile.labels" . | nindent 4 }}
+
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "gophprofile.selectorLabels" . | nindent 6 }}
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-controller
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 53
+
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5672
+
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 9000

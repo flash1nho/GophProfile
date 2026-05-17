@@ -1,0 +1,89 @@
+replicaCount: 2
+
+image:
+  repository: flash1nho/gophprofile
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+
+  hosts:
+    - host: gophprofile.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+  tls: []
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  cpuUtilization: 70
+  memoryUtilization: 80
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env: []
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+
+podDisruptionBudget:
+  minAvailable: 1
+
+terminationGracePeriodSeconds: 30
+
+postgresql:
+  enabled: false
+
+rabbitmq:
+  enabled: false
+
+minio:
+  enabled: false
+
+secrets:
+  dbUrl: ""
+  rabbitUrl: ""
+  s3Key: ""
+  s3Secret: ""
+
+probes:
+  startup:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+
+  liveness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2

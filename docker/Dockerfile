@@ -24,10 +24,15 @@ RUN apk add --no-cache \
     tzdata \
     libwebp
 
-WORKDIR /root/
+WORKDIR /app/
 
 COPY --from=builder /app/server .
 COPY --from=builder /app/worker .
 COPY --from=builder /app/web ./web/
+COPY --from=builder /app/migrations ./migrations
 
-CMD ["./server"]
+USER 10001:10001
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/server"]
